@@ -1,15 +1,11 @@
 from typing import TypedDict, Literal
 from langgraph.graph import StateGraph, END
-from backend.agents import (
-    orchestrator_router,
-    analyze_email_content, run_gatekeeper_checks, explain_compliance_result,
-    generate_order_pdf
-)
-from backend.database import (
-    get_unanalyzed_emails, get_item_by_name, get_vendor,
-    save_email_analysis, get_email_analysis, get_all_email_analyses,
-    create_order, get_order_by_id
-)
+from backend.agents import orchestrator_router
+from backend.database import get_unanalyzed_emails, get_email_analyses_by_status, get_order_by_id, set_email_analysis_status
+from backend.services.emails import analyze_email
+from backend.services.compliance import run_compliance, save_compliance_explanation, send_cancel_notification
+from backend.services.orders import generate_and_store_pdf
+from backend.services.suppliers import onboard_supplier_from_text
 
 # 1. Define State
 class AgentState(TypedDict):
@@ -40,9 +36,9 @@ def orchestrator_node(state: AgentState):
     
     display_decision = decision
     if decision == "unknown" and (ui_actions or chat_response):
-        display_decision = "inline UI / direct response"
+        display_decision = "内联 UI / 直接回复"
         
-    steps.append(f"Orchestrator: Analyzed input. Routing to {display_decision}.")
+    steps.append(f"编排器：已分析输入，路由到 {display_decision}。")
     
     return {
         "routing_decision": decision, 
@@ -52,133 +48,96 @@ def orchestrator_node(state: AgentState):
     }
 
 def agent_email_node(state: AgentState):
-    """
-    Full pipeline: analyze emails → compliance check → LLM explanation → create DRAFT order.
-    """
-    steps = list(state.get("steps", [])) + ["Email Agent: Starting email analysis pipeline..."]
-    gatekeeper_results = []
-    order_ids = []
-    analyzed_count = order_count = rejected_count = 0
+    """分析所有未分析邮件：LLM 提取 → 物品/供应商匹配 → 保存。"""
+    steps = list(state.get("steps", [])) + ["邮件智能体：正在启动邮件分析流水线..."]
+    analyzed_count = 0
 
     unanalyzed = get_unanalyzed_emails()
     if not unanalyzed:
         return {
-            "output_text": "No new emails to analyze right now.",
-            "steps": steps + ["Email Agent: No unanalyzed emails found."],
+            "output_text": "当前没有新邮件需要分析。",
+            "steps": steps + ["邮件智能体：未发现未分析的邮件。"],
             "gatekeeper_results": [],
-            "order_ids": []
+            "order_ids": [],
         }
 
     for email in unanalyzed:
-        email_id = email['id']
+        email_id = email["id"]
         try:
-            # ── Step 1: AI extraction ──────────────────────
-            analysis_data = analyze_email_content(email['body'])
-            if not analysis_data:
-                steps.append(f"Email Agent: Could not extract data from '{email_id}'. Skipping.")
+            saved = analyze_email(email_id, email["body"])
+            if not saved:
+                steps.append(f"邮件智能体：无法从 '{email_id}' 提取数据，已跳过。")
                 continue
-
-            # ── Step 2: Item & Vendor lookup ───────────────
-            item_data = get_item_by_name(analysis_data['item_name']) if analysis_data.get('item_name') else None
-            vendor_data = get_vendor(item_data['default_vendor_id']) if item_data and item_data.get('default_vendor_id') else None
-
-            # ── Step 3: Save analysis ──────────────────────
-            save_email_analysis(email_id, analysis_data, item_data, vendor_data)
-            saved = get_email_analysis(email_id)
             steps.append(
-                f"📧 Email '{email_id}': '{analysis_data.get('item_name', '?')}' "
-                f"x{analysis_data.get('quantity', '?')} — Priority: {analysis_data.get('priority', '?')}"
+                f"📧 邮件 '{email_id}'：'{saved.get('item_name', '?')}' "
+                f"x{saved.get('item_quantity', '?')} — 优先级：{saved.get('priority', '?')}"
             )
             analyzed_count += 1
-
-            if not saved:
-                continue
-
         except Exception as e:
-            steps.append(f"Error processing email '{email_id}': {str(e)}")
+            set_email_analysis_status(email_id, "failed", str(e))
+            steps.append(f"处理邮件 '{email_id}' 时出错：{str(e)}")
 
-    summary = f"Pipeline complete — Extractions saved: {analyzed_count}."
+    summary = f"流水线完成 — 已保存提取结果：{analyzed_count} 条。"
     steps.append(summary)
-    
+
     return {
         "output_text": summary,
         "steps": steps,
         "gatekeeper_results": [],
-        "order_ids": []
+        "order_ids": [],
     }
 
 
 def compliance_node(state: AgentState):
-    """
-    Standalone compliance node: runs gatekeeper checks on ALL existing
-    email_analysis records and returns results to the orchestrator.
-    Creates DRAFT orders for analyses that pass and don't have an order yet.
-    """
-    steps = list(state.get("steps", [])) + ["Compliance Agent: Running gatekeeper checks on all analyzed emails..."]
-    gatekeeper_results = []
-    order_ids = []
-    passed_count = failed_count = order_count = 0
+    """对「高/中/低优先」的邮件运行批量合规检查。
 
-    analyses = get_all_email_analyses()
+    通过 → 进入「待审核」；未通过 → 「未通过」并自动发邮件通知发件人。
+    """
+    steps = list(state.get("steps", [])) + ["合规智能体：正在对「高/中/低优先」的邮件运行批量守门检查..."]
+    gatekeeper_results = []
+    passed_count = failed_count = 0
+
+    analyses = get_email_analyses_by_status("analyzed")
     if not analyses:
         return {
-            "output_text": "No analyzed emails found. Run 'analyze emails' first.",
-            "steps": steps + ["Compliance Agent: No email analyses in database."],
+            "output_text": "当前没有需要合规检查的邮件（仅检查「高/中/低优先」状态）。",
+            "steps": steps + ["合规智能体：没有处于「高/中/低优先」状态的邮件。"],
             "gatekeeper_results": [],
-            "order_ids": []
+            "order_ids": [],
         }
 
     for analysis in analyses:
-        item_name = analysis.get('item_name', 'Unknown')
-        email_id  = analysis.get('email_id', '?')
+        item_name = analysis.get("item_name", "未知")
+        email_id = analysis.get("email_id", "?")
         try:
-            gate = run_gatekeeper_checks(analysis)
-            explanation = explain_compliance_result(analysis, gate)
-            gate['email_id'] = email_id
-            gate['item_name'] = item_name
-            gate['explanation'] = explanation
-            gatekeeper_results.append(gate)
+            result = run_compliance(analysis)
+            save_compliance_explanation(email_id, result["explanation"])
+            gatekeeper_results.append({
+                "email_id": email_id,
+                "item_name": item_name,
+                **result,
+            })
 
-            if gate['passed']:
+            if result["passed"]:
+                set_email_analysis_status(email_id, "pending_review")
                 passed_count += 1
-                steps.append(f"✅ PASSED  [{item_name}]: {explanation}")
-
-                # Create a DRAFT order if item & vendor are linked
-                item_id   = analysis.get('item_id')
-                vendor_id = analysis.get('vendor_id')
-                amount    = analysis.get('total_cost', 0) or 0
-                qty       = analysis.get('item_quantity', 1)
-                if item_id and vendor_id and amount > 0:
-                    order_id = create_order(
-                        item_id=item_id,
-                        vendor_id=vendor_id,
-                        qty=qty,
-                        amount=amount
-                    )
-                    order_ids.append(order_id)
-                    order_count += 1
-                    steps.append(f"📋 Order #{order_id} created — ${amount:,.2f}")
+                steps.append(f"✅ 通过  [{item_name}] → 待审核")
             else:
+                set_email_analysis_status(email_id, "failed_compliance")
+                send_cancel_notification(email_id, result["explanation"])
                 failed_count += 1
-                steps.append(f"❌ FAILED  [{item_name}]: {explanation}")
-
+                steps.append(f"❌ 未通过  [{item_name}]（已通知发件人）：{result['explanation']}")
         except Exception as e:
-            steps.append(f"Error checking '{item_name}' (email {email_id}): {str(e)}")
+            steps.append(f"检查 '{item_name}'（邮件 {email_id}）时出错：{str(e)}")
 
-    summary = (
-        f"Compliance complete — {len(analyses)} checked, "
-        f"✅ {passed_count} passed, ❌ {failed_count} failed, "
-        f"📋 {order_count} orders created."
-    )
-    if order_ids:
-        summary += f" New Order IDs: {order_ids}."
+    summary = f"合规检查完成 — 共检查 {len(analyses)} 项，✅ {passed_count} 项通过（待审核），❌ {failed_count} 项未通过。"
     steps.append(summary)
 
     return {
         "output_text": summary,
         "steps": steps,
         "gatekeeper_results": gatekeeper_results,
-        "order_ids": order_ids
+        "order_ids": [],
     }
 
 
@@ -189,67 +148,59 @@ def pdf_node(state: AgentState):
     """
     import re
     import os
-    from backend.database import get_db_connection
 
-    steps = list(state.get("steps", [])) + ["PDF Agent: Starting PDF generation..."]
+    steps = list(state.get("steps", [])) + ["PDF 智能体：正在启动 PDF 生成..."]
     input_text = state.get("input_text", "")
 
     # Extract order ID from input (e.g. 'generate pdf for order 14' → 14)
     numbers = re.findall(r'\d+', input_text)
     if not numbers:
         return {
-            "output_text": "Please specify an order ID. Example: 'generate PDF for order 14'",
-            "steps": steps + ["PDF Agent: No order ID found in input."]
+            "output_text": "请指定订单 ID。示例：“为订单 14 生成 PDF”",
+            "steps": steps + ["PDF 智能体：输入中未找到订单 ID。"]
         }
 
     order_id = int(numbers[0])
-    steps.append(f"PDF Agent: Generating PDF for Order #{order_id}...")
+    steps.append(f"PDF 智能体：正在为订单 #{order_id} 生成 PDF...")
 
     order = get_order_by_id(order_id)
     if not order:
         return {
-            "output_text": f"Order #{order_id} not found. Check 'GET /orders' for valid IDs.",
-            "steps": steps + [f"PDF Agent: Order #{order_id} not found in database."]
+            "output_text": f"未找到订单 #{order_id}。可通过 'GET /orders' 查看有效 ID。",
+            "steps": steps + [f"PDF 智能体：数据库中未找到订单 #{order_id}。"]
         }
 
     try:
         order_context = {
-            "order_id":    order_id,
-            "item_name":   order.get("item_name", "N/A"),
+            "item_name":   order.get("item_name", "无"),
             "quantity":    order.get("qty", 0),
             "unit_price":  order.get("unit_price", 0),
             "total_cost":  order.get("amount", 0),
-            "vendor_name": order.get("vendor_name", "N/A"),
-            "vendor_email":order.get("vendor_email", "N/A"),
+            "vendor_name": order.get("vendor_name", "无"),
+            "vendor_email":order.get("vendor_email", "无"),
             "created_at":  order.get("created_at", ""),
         }
 
-        pdf_path = generate_order_pdf(order_context)
-
-        # Update pdf_path in orders table
-        conn = get_db_connection()
-        conn.execute("UPDATE orders SET pdf_path = ? WHERE id = ?", (pdf_path, order_id))
-        conn.commit()
-        conn.close()
+        pdf_path = generate_and_store_pdf(order_id, order_context)
 
         abs_path = os.path.abspath(pdf_path)
-        steps.append(f"PDF Agent: ✅ PDF generated at '{pdf_path}'")
+        steps.append(f"PDF 智能体：✅ 已在 '{pdf_path}' 生成 PDF")
 
         return {
             "output_text": (
-                f"📄 Purchase Order PDF for Order #{order_id} has been generated!\n"
-                f"Item: {order_context['item_name']}\n"
-                f"Vendor: {order_context['vendor_name']}\n"
-                f"Amount: ${order_context['total_cost']:,.2f}\n"
-                f"File saved at: {abs_path}\n"
-                f"Or download via: POST /orders/{order_id}/generate-pdf"
+                f"📄 订单 #{order_id} 的采购订单 PDF 已生成！\n"
+                f"物品：{order_context['item_name']}\n"
+                f"供应商：{order_context['vendor_name']}\n"
+                f"金额：${order_context['total_cost']:,.2f}\n"
+                f"文件保存于：{abs_path}\n"
+                f"或通过下载：POST /orders/{order_id}/generate-pdf"
             ),
             "steps": steps
         }
     except Exception as e:
         return {
-            "output_text": f"Failed to generate PDF for Order #{order_id}: {str(e)}",
-            "steps": steps + [f"PDF Agent: Error — {str(e)}"]
+            "output_text": f"为订单 #{order_id} 生成 PDF 失败：{str(e)}",
+            "steps": steps + [f"PDF 智能体：出错 — {str(e)}"]
         }
 
 def unknown_node(state: AgentState):
@@ -260,8 +211,8 @@ def unknown_node(state: AgentState):
     output_text = state.get("output_text", "")
     
     # If orchestrator provided a chat response, use it
-    if isinstance(output_text, str) and output_text and not output_text.startswith("I'm sorry, I couldn't determine"):
-        steps.append("Orchestrator: Direct response provided.")
+    if isinstance(output_text, str) and output_text and not output_text.startswith("抱歉，我无法判断"):
+        steps.append("编排器：已提供直接回复。")
         return {
             "output_text": output_text,
             "steps": steps
@@ -269,15 +220,15 @@ def unknown_node(state: AgentState):
         
     ui_actions = state.get("ui_actions", [])
     if ui_actions:
-        steps.append("Orchestrator: Performed UI actions. Request fulfilled.")
+        steps.append("编排器：已执行 UI 操作，请求已完成。")
         return {
-            "output_text": "I've updated your view based on your request.",
+            "output_text": "我已根据你的请求更新了视图。",
             "steps": steps
         }
     
-    steps.append("Orchestrator: Could not determine intent. Execution stopped.")
+    steps.append("编排器：无法判断意图，已停止执行。")
     return {
-        "output_text": "I'm sorry, I couldn't determine the intent. Please try asking about your inbox or converting a number.",
+        "output_text": "抱歉，我无法判断你的意图。请尝试询问关于收件箱或进行数字转换的问题。",
         "steps": steps
     }
 
@@ -286,24 +237,86 @@ def service_unavailable_node(state: AgentState):
     Handles disabled agents.
     """
     return {
-        "output_text": "Service Unavailable: The required agent is currently disabled.",
-        "steps": state.get("steps", []) + ["Orchestrator: Agent disabled. Service unavailable."]
+        "output_text": "服务不可用：所需智能体当前已禁用。",
+        "steps": state.get("steps", []) + ["编排器：智能体已禁用，服务不可用。"]
+    }
+
+def supplier_node(state: AgentState):
+    """供应商入驻：从自然语言提取供应商信息、评分并建档。"""
+    steps = list(state.get("steps", [])) + ["供应商智能体：正在提取供应商信息..."]
+    text = state.get("input_text", "")
+
+    result = onboard_supplier_from_text(text)
+    if result.get("status") != "success":
+        msg = result.get("message", "供应商入驻失败。")
+        return {
+            "output_text": msg,
+            "steps": steps + [f"供应商智能体：{msg}"],
+            "ui_actions": [],
+            "gatekeeper_results": [],
+            "order_ids": [],
+        }
+
+    steps.append(
+        f"供应商智能体：已入驻「{result['name']}」，初始评分 {result['ext_score']} 分。"
+    )
+    output = (
+        f"✅ 供应商「{result['name']}」已入驻（ID #{result['vendor_id']}）。\n"
+        f"主营品类：{result.get('category') or '未填写'}\n"
+        f"邮箱：{result.get('email') or '未填写'}\n"
+        f"电话：{result.get('phone') or '未填写'}\n"
+        f"初始评分：{result['ext_score']} 分\n"
+        f"审核意见：{result.get('review') or '无'}"
+    )
+    return {
+        "output_text": output,
+        "steps": steps,
+        "ui_actions": [],
+        "gatekeeper_results": [],
+        "order_ids": [],
+    }
+
+def forecast_node(state: AgentState):
+    """启动后台预测生成，立即返回；完成后前端轮询状态并提示用户。"""
+    from backend.forecast import start_forecast_generation
+
+    steps = list(state.get("steps", [])) + ["预测智能体：正在后台启动预测生成..."]
+    started = start_forecast_generation()
+    if started:
+        output = "🔮 正在后台生成预测报告，完成后会通知你。"
+        steps.append("预测智能体：已在后台启动预测生成。")
+        ui_actions = [{"action_type": "start_forecast", "params": {}}]
+    else:
+        output = "预测任务正在生成中，请稍候。"
+        steps.append("预测智能体：已有预测任务正在生成。")
+        ui_actions = []
+
+    return {
+        "output_text": output,
+        "steps": steps,
+        "ui_actions": ui_actions,
+        "gatekeeper_results": [],
+        "order_ids": [],
     }
 
 # 3. Define Conditional Logic
-def route_decision(state: AgentState) -> Literal["agent_email", "agent_compliance", "agent_pdf", "unknown", "service_unavailable"]:
+def route_decision(state: AgentState) -> Literal["agent_email", "agent_compliance", "agent_pdf", "agent_supplier", "agent_forecast", "unknown", "service_unavailable"]:
     decision = state["routing_decision"]
     agent_enabled_map = {
         "email":      state.get("agent_email_enabled", True),
         "compliance": state.get("agent_compliance_enabled", True),
         "pdf":        state.get("agent_pdf_enabled", True),
+        "forecast":   state.get("agent_forecast_enabled", True),
     }
 
-    if decision in ["email", "compliance", "pdf"]:
+    if decision in ["email", "compliance", "pdf", "forecast"]:
         if agent_enabled_map[decision]:
             return f"agent_{decision}"
         else:
             return "service_unavailable"
+    
+    if decision == "supplier":
+        return "agent_supplier"
     
     return "unknown"
 
@@ -315,6 +328,8 @@ workflow.add_node("orchestrator", orchestrator_node)
 workflow.add_node("agent_email", agent_email_node)
 workflow.add_node("agent_compliance", compliance_node)
 workflow.add_node("agent_pdf", pdf_node)
+workflow.add_node("agent_supplier", supplier_node)
+workflow.add_node("agent_forecast", forecast_node)
 workflow.add_node("unknown", unknown_node)
 workflow.add_node("service_unavailable", service_unavailable_node)
 
@@ -329,6 +344,8 @@ workflow.add_conditional_edges(
         "agent_email":       "agent_email",
         "agent_compliance":  "agent_compliance",
         "agent_pdf":         "agent_pdf",
+        "agent_supplier":    "agent_supplier",
+        "agent_forecast":    "agent_forecast",
         "unknown":           "unknown",
         "service_unavailable": "service_unavailable"
     }
@@ -338,6 +355,8 @@ workflow.add_conditional_edges(
 workflow.add_edge("agent_email", END)
 workflow.add_edge("agent_compliance", END)
 workflow.add_edge("agent_pdf", END)
+workflow.add_edge("agent_supplier", END)
+workflow.add_edge("agent_forecast", END)
 workflow.add_edge("unknown", END)
 workflow.add_edge("service_unavailable", END)
 

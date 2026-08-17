@@ -1,6 +1,0 @@
-flet
-pandas
-prophet
-ollama
-python-dotenv
-

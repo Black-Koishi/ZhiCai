@@ -24,7 +24,6 @@ def get_current_model(agent_name: str) -> str:
         "orchestrator": "ORCHESTRATOR_MODEL",
         "email": "EMAIL_MODEL",
         "compliance": "COMPLIANCE_MODEL",
-        "po": "PO_MODEL",
         "forecast": "FORECAST_MODEL"
     }
     key = env_keys.get(agent_name, "ORCHESTRATOR_MODEL")
@@ -55,7 +54,6 @@ def update_agent_model(agent_name: str, model_name: str):
         "orchestrator": "ORCHESTRATOR_MODEL",
         "email": "EMAIL_MODEL",
         "compliance": "COMPLIANCE_MODEL",
-        "po": "PO_MODEL",
         "forecast": "FORECAST_MODEL"
     }
     key = env_keys.get(agent_name)
@@ -72,9 +70,21 @@ def update_agent_model(agent_name: str, model_name: str):
     # Important: We don't need to explicitly delete from llm_instances here,
     # as get_llm will automatically create a new instance with the new model_name.
 
+def list_ollama_models() -> list[str]:
+    """从本地 Ollama 获取已安装（已 pull）的模型名称列表。"""
+    import json
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"{OLLAMA_BASE_URL}/api/tags", timeout=5) as resp:
+            data = json.loads(resp.read())
+        return [m.get("name") for m in data.get("models", [])]
+    except Exception as e:
+        print(f"获取 Ollama 模型列表失败: {e}")
+        return []
+
+
 # For backward compatibility during refactor, we provide helper getters that agent 
 # files can use (or they can call get_llm directly).
 def get_router_llm(): return get_llm("orchestrator", format="json")
 def get_email_analyzer_llm(): return get_llm("email")
 def get_compliance_llm(): return get_llm("compliance")
-def get_po_llm(): return get_llm("po")

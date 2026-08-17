@@ -1,10 +1,11 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Brain, Activity, Terminal, ArrowRight, CheckCircle2, Clock, AlertCircle, Mail, Shield, ShoppingCart, TrendingUp, Cpu } from "lucide-react";
+import { Brain, Activity, Terminal, ArrowRight, CheckCircle2, Clock, AlertCircle, Mail, Shield, TrendingUp, Cpu } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Message } from "./ChatInterface";
+import { API_BASE_URL } from "@/api/client";
 
 interface DashboardProps {
     messages: Message[];
@@ -29,85 +30,59 @@ interface Agent {
 const initialAgents: Agent[] = [
     {
         id: "orch-01",
-        key: "Orchestrator",
+        key: "编排器",
         agentSettingsKey: "orchestrator",
-        name: "Orchestrator",
-        role: "System Coordinator",
+        name: "编排器",
+        role: "系统协调器",
         status: "idle",
         icon: Brain,
         color: "from-purple-500 to-indigo-600",
-        description: "Central neural unit responsible for breaking down user requests and delegating sub-tasks to specialized agents.",
-        thoughts: ["System initialized.", "Waiting for input..."],
-        capabilities: ["Intent Classification", "Task Delegation", "Context Management"],
-        model: "Loading..."
+        description: "中央调度单元，负责拆解用户请求并将子任务委派给专业智能体。",
+        thoughts: ["系统已初始化。", "等待输入..."],
+        capabilities: ["意图分类", "任务委派", "上下文管理"],
+        model: "加载中..."
     },
     {
         id: "agent-email-05",
-        key: "Email Agent",
+        key: "邮件智能体",
         agentSettingsKey: "email",
-        name: "Email Agent",
-        role: "Communication",
+        name: "邮件智能体",
+        role: "通讯",
         status: "idle",
         icon: Mail,
         color: "from-sky-500 to-blue-600",
-        description: "Handles incoming and outgoing email communications, extracting orders or vendor queries.",
-        thoughts: ["Model loaded.", "Monitoring inbox..."],
-        capabilities: ["Email Parsing", "Supplier Search", "Cost Calculation"],
-        model: "Loading..."
+        description: "处理收发邮件通信，提取订单或供应商询价信息。",
+        thoughts: ["模型已加载。", "正在监控收件箱..."],
+        capabilities: ["邮件解析", "供应商检索", "成本计算"],
+        model: "加载中..."
     },
     {
         id: "agent-comp-06",
-        key: "Compliance Agent",
+        key: "合规智能体",
         agentSettingsKey: "compliance",
-        name: "Compliance Agent",
-        role: "Policy Enforcer",
+        name: "合规智能体",
+        role: "政策执行器",
         status: "idle",
         icon: Shield,
         color: "from-rose-500 to-red-600",
-        description: "Checks procurement requests against company policies, budget limits, and vendor restrictions.",
-        thoughts: ["Policies loaded.", "Ready for validation."],
-        capabilities: ["Policy Check", "Budget Approval"],
-        model: "Loading..."
-    },
-    {
-        id: "agent-order-07",
-        key: "Order Agent",
-        agentSettingsKey: "po",
-        name: "Order Agent",
-        role: "Order Management",
-        status: "idle",
-        icon: ShoppingCart,
-        color: "from-amber-500 to-yellow-600",
-        description: "Processes and tracks purchase orders, managing interactions with the inventory system.",
-        thoughts: ["System connected.", "Awaiting orders."],
-        capabilities: ["Order Creation", "Status Tracking"],
-        model: "Loading..."
+        description: "依据公司政策、预算上限和供应商限制来审核采购请求。",
+        thoughts: ["政策已加载。", "准备校验。"],
+        capabilities: ["政策检查", "预算审批"],
+        model: "加载中..."
     },
     {
         id: "agent-forecast-08",
-        key: "Forecast Agent",
+        key: "预测智能体",
         agentSettingsKey: "forecast",
-        name: "Forecast Agent",
-        role: "Predictive Analytics",
+        name: "预测智能体",
+        role: "预测分析",
         status: "idle",
         icon: TrendingUp,
         color: "from-teal-500 to-emerald-600",
-        description: "Analyzes historical data to predict future inventory needs and suggest restock timelines.",
-        thoughts: ["Data models loaded.", "Ready for analysis."],
-        capabilities: ["Trend Prediction", "Demand Forecasting"],
-        model: "Loading..."
-    },
-    {
-        id: "sys-04",
-        key: "System",
-        name: "System Monitor",
-        role: "Infrastructure",
-        status: "active",
-        icon: Activity,
-        color: "from-orange-500 to-red-500",
-        description: "Continuously monitors system health, API latency, and resource usage across the agent swarm.",
-        thoughts: ["CPU: Normal", "Memory: Optimal", "Network: Stable"],
-        capabilities: ["Health Checks", "Resource Monitoring", "Alerting"]
+        description: "分析历史数据，预测未来库存需求并建议补货时间。",
+        thoughts: ["数据模型已加载。", "准备分析。"],
+        capabilities: ["趋势预测", "需求预测"],
+        model: "加载中..."
     }
 ];
 
@@ -122,7 +97,7 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
         
         const fetchModels = async () => {
             try {
-                const res = await fetch("http://localhost:8000/settings/models");
+                const res = await fetch(`${API_BASE_URL}/settings/models`);
                 if (!res.ok) throw new Error("Failed to fetch models");
                 const data = await res.json();
                 
@@ -186,10 +161,8 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                 const updatedAgent = { ...agent };
 
                 // 1. Update Status based on global loading state
-                if (agent.key === "Orchestrator") {
+                if (agent.key === "编排器") {
                     updatedAgent.status = isLoading ? "thinking" : "active";
-                } else if (agent.key === "System") {
-                    updatedAgent.status = "active";
                 } else {
                     // For worker agents, check if they were involved in the last turn
                     const engaged = steps.some(step => step.includes(agent.key));
@@ -211,8 +184,8 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                         return parts.length > 1 ? parts[1] : step;
                     });
                     updatedAgent.thoughts = cleanThoughts;
-                } else if (isLoading && agent.key === "Orchestrator") {
-                    updatedAgent.thoughts = ["Analyzing request...", "Determining route..."];
+                } else if (isLoading && agent.key === "编排器") {
+                    updatedAgent.thoughts = ["正在分析请求...", "正在确定路由..."];
                 }
 
                 return updatedAgent;
@@ -224,20 +197,20 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
 
     return (
         <div className="h-full flex flex-col bg-transparent overflow-hidden">
-            <ScrollArea className="flex-1 p-6">
-                <div className="max-w-7xl mx-auto">
+            <ScrollArea className="flex-1">
+                <div className="max-w-7xl mx-auto p-6">
                     <motion.div
                         initial={{ opacity: 0, y: 20 }}
                         animate={{ opacity: 1, y: 0 }}
                         className="mb-8"
                     >
                         <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent mb-2">
-                            Neural Dashboard
+                            智能体仪表盘
                         </h1>
-                        <p className="text-muted-foreground">Real-time telemetry of the active agent swarm.</p>
+                        <p className="text-muted-foreground">活动智能体集群的实时遥测。</p>
                     </motion.div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                         {agents.map((agent, index) => (
                             <motion.div
                                 key={agent.id}
@@ -273,13 +246,13 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                                         {agent.model && (
                                             <div className="flex items-center gap-1.5 mb-4 text-xs font-medium text-slate-600 dark:text-slate-400 bg-black/5 dark:bg-white/5 w-fit px-2.5 py-1 rounded-md border border-black/5 dark:border-white/10">
                                                 <Cpu className="w-3.5 h-3.5" />
-                                                <span>Model:</span>
+                                                <span>模型：</span>
                                                 <span className="text-foreground tracking-tight">{agent.model}</span>
                                             </div>
                                         )}
                                         
                                         <div className="flex items-center text-xs text-blue-600 dark:text-blue-400 font-medium group-hover:translate-x-1 transition-transform mt-auto">
-                                            View Logs <ArrowRight className="w-3 h-3 ml-1" />
+                                            查看日志 <ArrowRight className="w-3 h-3 ml-1" />
                                         </div>
                                     </CardContent>
 
@@ -341,11 +314,11 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                                     {selectedAgent.model && (
                                         <div>
                                             <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                                                <Cpu className="w-4 h-4" /> Configured Engine
+                                                <Cpu className="w-4 h-4" /> 已配置引擎
                                             </h3>
                                             <div className="flex flex-col bg-blue-50/50 dark:bg-blue-900/10 rounded-lg p-4 border border-blue-100 dark:border-blue-900/30">
                                                 <div className="flex items-center justify-between">
-                                                    <span className="text-sm text-slate-600 dark:text-slate-400">Current LLM:</span>
+                                                    <span className="text-sm text-slate-600 dark:text-slate-400">当前 LLM：</span>
                                                     <Badge variant="outline" className="bg-white dark:bg-black text-blue-700 dark:text-blue-400 border-blue-200 dark:border-blue-800">
                                                         {selectedAgent.model}
                                                     </Badge>
@@ -357,7 +330,7 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                                     {/* Capabilities */}
                                     <div>
                                         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                                            <Brain className="w-4 h-4" /> Attributes
+                                            <Brain className="w-4 h-4" /> 能力属性
                                         </h3>
                                         <div className="flex flex-wrap gap-2">
                                             {selectedAgent.capabilities.map((cap) => (
@@ -371,7 +344,7 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                                     {/* Live Thoughts Terminal */}
                                     <div>
                                         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                                            <Terminal className="w-4 h-4" /> Live Logs
+                                            <Terminal className="w-4 h-4" /> 实时日志
                                         </h3>
                                         <div className="bg-gray-50 dark:bg-black/50 rounded-lg border border-black/5 dark:border-white/10 p-4 font-mono text-sm shadow-inner min-h-[150px]">
                                             {selectedAgent.thoughts.map((thought, i) => (
@@ -397,8 +370,8 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                                     </div>
 
                                     <div className="text-xs text-muted-foreground pt-4 border-t border-black/5 dark:border-white/5 flex justify-between">
-                                        <span>Agent ID: <span className="font-mono text-blue-500 dark:text-blue-400/70">{selectedAgent.id}</span></span>
-                                        <span>Uptime: {uptime}</span>
+                                        <span>智能体 ID：<span className="font-mono text-blue-500 dark:text-blue-400/70">{selectedAgent.id}</span></span>
+                                        <span>运行时间：{uptime}</span>
                                     </div>
                                 </div>
                             </ScrollArea>
@@ -412,11 +385,11 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
 
 function StatusBadge({ status, size = "sm" }: { status: string, size?: "sm" | "lg" }) {
     const config = {
-        active: { color: "bg-green-500", label: "Active", icon: CheckCircle2, text: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
-        thinking: { color: "bg-cyan-500", label: "Thinking", icon: Activity, text: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-500/10" },
-        idle: { color: "bg-gray-400", label: "Idle", icon: Clock, text: "text-gray-500 dark:text-gray-400", bg: "bg-gray-500/10" },
-        error: { color: "bg-red-500", label: "Error", icon: AlertCircle, text: "text-red-600 dark:text-red-400", bg: "bg-red-500/10" }
-    }[status] || { color: "bg-gray-500", label: "Unknown", icon: Clock, text: "text-gray-500", bg: "bg-gray-500/10" };
+        active: { color: "bg-green-500", label: "活跃", icon: CheckCircle2, text: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
+        thinking: { color: "bg-cyan-500", label: "思考中", icon: Activity, text: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-500/10" },
+        idle: { color: "bg-gray-400", label: "空闲", icon: Clock, text: "text-gray-500 dark:text-gray-400", bg: "bg-gray-500/10" },
+        error: { color: "bg-red-500", label: "错误", icon: AlertCircle, text: "text-red-600 dark:text-red-400", bg: "bg-red-500/10" }
+    }[status] || { color: "bg-gray-500", label: "未知", icon: Clock, text: "text-gray-500", bg: "bg-gray-500/10" };
 
     return (
         <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border border-transparent ${config.bg} ${status === 'thinking' ? 'animate-pulse' : ''} ${size === 'lg' ? 'px-4 py-1.5' : ''}`}>

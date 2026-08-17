@@ -1,41 +1,25 @@
 import { Button } from "@/components/ui/button"
 import { ScrollArea } from "@/components/ui/scroll-area"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Switch } from "@/components/ui/switch"
 import { cn } from "@/lib/utils"
-import { Bot, ChevronLeft, ChevronRight, Home, Settings as SettingsIcon, Mail, LayoutDashboard, Book, Database, PlusCircle, ShoppingCart, TrendingUp } from "lucide-react"
+import { Bot, ChevronLeft, ChevronRight, Home, Settings as SettingsIcon, Mail, LayoutDashboard, PlusCircle, ShoppingCart, TrendingUp } from "lucide-react"
 import { NavItem } from "./NavItem"
 
 interface SidebarProps {
-    agentEmailEnabled: boolean;
-    setAgentEmailEnabled: (enabled: boolean) => void;
-    agentComplianceEnabled: boolean;
-    setAgentComplianceEnabled: (enabled: boolean) => void;
-    agentPdfEnabled: boolean;
-    setAgentPdfEnabled: (enabled: boolean) => void;
-    agentForecastEnabled: boolean;
-    setAgentForecastEnabled: (enabled: boolean) => void;
-    activeView: "home" | "emails" | "settings" | "dashboard" | "docs" | "database" | "new_order" | "orders" | "forecast";
-    setActiveView: (view: "home" | "emails" | "settings" | "dashboard" | "docs" | "database" | "new_order" | "orders" | "forecast") => void;
+    activeView: "home" | "emails" | "settings" | "dashboard" | "new_order" | "orders" | "forecast";
+    setActiveView: (view: "home" | "emails" | "settings" | "dashboard" | "new_order" | "orders" | "forecast") => void;
     isCollapsed: boolean;
     setIsCollapsed: (collapsed: boolean) => void;
     onNewOrder: () => void;
+    emailBadgeCount?: number;
 }
 
 export function Sidebar({
-    agentEmailEnabled,
-    setAgentEmailEnabled,
-    agentComplianceEnabled,
-    setAgentComplianceEnabled,
-    agentPdfEnabled,
-    setAgentPdfEnabled,
-    agentForecastEnabled,
-    setAgentForecastEnabled,
     activeView,
     setActiveView,
     isCollapsed,
     setIsCollapsed,
-    onNewOrder
+    onNewOrder,
+    emailBadgeCount = 0
 }: SidebarProps) {
 
     const toggleCollapse = () => setIsCollapsed(!isCollapsed);
@@ -63,8 +47,8 @@ export function Sidebar({
                 </div>
                 {!isCollapsed && (
                     <div className="ml-3 flex flex-col">
-                        <span className="font-bold text-lg leading-none tracking-tight">Procurement<span className="text-primary">Console</span></span>
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mt-1">v26.03.15-001</span>
+                        <span className="font-bold text-lg leading-none tracking-tight">智采<span className="text-primary"> ZhiCai</span></span>
+                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mt-1">v1.0.0</span>
                     </div>
                 )}
             </div>
@@ -80,12 +64,12 @@ export function Sidebar({
                         )}
                     >
                         <PlusCircle className="h-5 w-5" />
-                        {!isCollapsed && <span>New Order</span>}
+                        {!isCollapsed && <span>新建订单</span>}
                     </Button>
                     <NavItem
                         view="home"
                         icon={Home}
-                        label="Home"
+                        label="首页"
                         activeView={activeView}
                         setActiveView={setActiveView}
                         isCollapsed={isCollapsed}
@@ -93,7 +77,7 @@ export function Sidebar({
                     <NavItem
                         view="dashboard"
                         icon={LayoutDashboard}
-                        label="Dashboard"
+                        label="仪表盘"
                         activeView={activeView}
                         setActiveView={setActiveView}
                         isCollapsed={isCollapsed}
@@ -101,23 +85,16 @@ export function Sidebar({
                     <NavItem
                         view="emails"
                         icon={Mail}
-                        label="Emails"
+                        label="邮件"
                         activeView={activeView}
                         setActiveView={setActiveView}
                         isCollapsed={isCollapsed}
-                    />
-                    <NavItem
-                        view="docs"
-                        icon={Book}
-                        label="Docs"
-                        activeView={activeView}
-                        setActiveView={setActiveView}
-                        isCollapsed={isCollapsed}
+                        badge={emailBadgeCount}
                     />
                     <NavItem
                         view="orders"
                         icon={ShoppingCart}
-                        label="Orders"
+                        label="管理"
                         activeView={activeView}
                         setActiveView={setActiveView}
                         isCollapsed={isCollapsed}
@@ -125,15 +102,7 @@ export function Sidebar({
                     <NavItem
                         view="forecast"
                         icon={TrendingUp}
-                        label="Forecast"
-                        activeView={activeView}
-                        setActiveView={setActiveView}
-                        isCollapsed={isCollapsed}
-                    />
-                    <NavItem
-                        view="database"
-                        icon={Database}
-                        label="Database"
+                        label="预测"
                         activeView={activeView}
                         setActiveView={setActiveView}
                         isCollapsed={isCollapsed}
@@ -141,74 +110,13 @@ export function Sidebar({
                     <NavItem
                         view="settings"
                         icon={SettingsIcon}
-                        label="Settings"
+                        label="设置"
                         activeView={activeView}
                         setActiveView={setActiveView}
                         isCollapsed={isCollapsed}
                     />
                 </nav>
             </ScrollArea>
-
-            {/* Footer / Agent Controls */}
-            <div className="p-4 mt-auto">
-                <Popover>
-                    <PopoverTrigger asChild>
-                        <Button
-                            variant="outline"
-                            className={cn(
-                                "w-full border-white/20 dark:border-white/10 bg-white/50 dark:bg-black/50 hover:bg-primary/10 hover:border-primary/50 transition-all duration-300",
-                                isCollapsed ? "px-0 justify-center aspect-square" : "justify-between h-12"
-                            )}
-                        >
-                            {isCollapsed ? <Bot className="h-5 w-5" /> : (
-                                <>
-                                    <span className="flex items-center font-medium">
-                                        <Bot className="mr-2 h-4 w-4" />
-                                        Agents
-                                    </span>
-                                    <ChevronRight className="h-4 w-4 opacity-50" />
-                                </>
-                            )}
-                        </Button>
-                    </PopoverTrigger>
-                    <PopoverContent side="right" className="w-80 ml-4 glass border-white/20 p-0 overflow-hidden">
-                        <div className="p-4 bg-blue-500/10 border-b border-white/10">
-                            <h4 className="font-semibold leading-none text-blue-900 dark:text-blue-100">Agent Status</h4>
-                            <p className="text-xs text-muted-foreground mt-1">Active Neural Modules</p>
-                        </div>
-                        <div className="p-4 grid gap-4">
-                            <div className="flex items-center justify-between">
-                                <label className="text-sm">Email Analyzer</label>
-                                <Switch
-                                    checked={agentEmailEnabled}
-                                    onCheckedChange={setAgentEmailEnabled}
-                                />
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <label className="text-sm">Compliance</label>
-                                <Switch
-                                    checked={agentComplianceEnabled}
-                                    onCheckedChange={setAgentComplianceEnabled}
-                                />
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <label className="text-sm">PDF Generator</label>
-                                <Switch
-                                    checked={agentPdfEnabled}
-                                    onCheckedChange={setAgentPdfEnabled}
-                                />
-                            </div>
-                            <div className="flex items-center justify-between">
-                                <label className="text-sm">Forecast</label>
-                                <Switch
-                                    checked={agentForecastEnabled}
-                                    onCheckedChange={setAgentForecastEnabled}
-                                />
-                            </div>
-                        </div>
-                    </PopoverContent>
-                </Popover>
-            </div>
         </div>
     )
 }

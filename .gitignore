@@ -1,13 +1,32 @@
+# ── Python ─────────────────────────────
 __pycache__/
 *.pyc
-.env
 .venv
 venv/
+
+# ── 环境变量（.env.example 会作为模板提交）──
+.env
+.env.local
+.env.*.local
+
+# ── 编辑器 / 系统 ──────────────────────
 .vscode/
+.idea/
+.DS_Store
+
+# ── 前端构建产物 ───────────────────────
 /frontend/.vite
-backend/data/procurement.db
-/reference
+*.tsbuildinfo
+/frontend/vite.config.js
+/frontend/vite.config.d.ts
+
+# ── 运行时数据（SQLite、附件、生成的订单 PDF）──
+backend/data/
+*.db
 emails.db
 orders/
+
+# ── 临时文件 ───────────────────────────
 /temp
-*.db
+/reference
+*.log

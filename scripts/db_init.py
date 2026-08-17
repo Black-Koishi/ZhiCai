@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS vendors(
   name TEXT NOT NULL,
   email TEXT,
   phone TEXT,
+  category TEXT,
   approved INTEGER DEFAULT 1,
   ext_score REAL DEFAULT 0
 );
@@ -34,13 +35,6 @@ CREATE TABLE IF NOT EXISTS inventory(
   min_qty INTEGER DEFAULT 0,
   FOREIGN KEY(item_id) REFERENCES items(id)
 );
-CREATE TABLE IF NOT EXISTS budgets(
-  dept TEXT,
-  period TEXT,
-  limit_amount REAL,
-  used_amount REAL DEFAULT 0,
-  PRIMARY KEY(dept, period)
-);
 CREATE TABLE IF NOT EXISTS policies(
   key TEXT PRIMARY KEY,
   value TEXT
@@ -52,6 +46,7 @@ CREATE TABLE IF NOT EXISTS orders(
   vendor_id INTEGER,
   amount REAL,
   pdf_path TEXT,
+  status TEXT DEFAULT 'draft',
   created_at TEXT DEFAULT (datetime('now')),
   FOREIGN KEY(item_id) REFERENCES items(id),
   FOREIGN KEY(vendor_id) REFERENCES vendors(id)
@@ -65,7 +60,10 @@ CREATE TABLE IF NOT EXISTS emails (
     body TEXT,
     folder TEXT,
     is_read BOOLEAN DEFAULT 0,
-    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+    analysis_status TEXT,
+    analysis_error TEXT,
+    attachments TEXT
 );
 CREATE TABLE IF NOT EXISTS email_analysis (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -81,6 +79,7 @@ CREATE TABLE IF NOT EXISTS email_analysis (
     vendor_email TEXT,
     vendor_phone TEXT,
     total_cost REAL,
+    budget REAL,
     compliance_explanation TEXT,
     order_id INTEGER,
     FOREIGN KEY(email_id) REFERENCES emails(id),
@@ -101,134 +100,122 @@ conn = sqlite3.connect(str(DB_PATH))
 conn.executescript(schema)
 
 # seed a couple of rows
-#conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,approved,ext_score) VALUES (1,'Acme Corp','sales@acme.example',1,82)")
+#conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,approved,ext_score) VALUES (1,'顶点公司','sales@acme.example',1,82)")
 #conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (1,'M4 Stainless Screws','M4-SS-100','box',12.50,1)")
-#conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('Operations','2025-Q3',50000,0)")
 #conn.execute("INSERT OR IGNORE INTO policies(key,value) VALUES ('max_single_order_amount','50000')")
 #conn.execute("INSERT OR IGNORE INTO inventory(item_id, qty_on_hand, max_capacity, min_qty) VALUES (1, 0, 1000, 50)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (1,'Tesla Energy','sales@teslaenergy.com','555-0199',1,90)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (2,'LG Chem','contact@lgchem.com','555-0288',1,88)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (3,'Panasonic','supply@panasonic.com','555-0377',1,85)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (4,'Bosch Mobility','orders@bosch.com','555-0466',1,87)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (5,'CATL','info@catl.com','555-0555',1,92)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (6,'BYD Components','orders@byd.com','555-0644',1,89)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (7,'Continental AG','sales@continental.com','555-0733',1,84)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (8,'Valeo','orders@valeo.com','555-0822',1,83)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (9,'Nippon Glass','supply@nippon-glass.jp','555-0911',1,86)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (10,'ZF Friedrichshafen','sales@zf.com','555-1000',1,82)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (11,'Delphi Tech','orders@delphi.com','555-1199',1,80)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (12,'Magna EV Systems','supply@magna.com','555-1288',1,81)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (13,'Samsung SDI','orders@samsung-sdi.com','555-1377',1,91)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (14,'Hitachi Automotive','sales@hitachi-auto.com','555-1466',1,85)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (15,'Infineon Tech','orders@infineon.com','555-1555',1,87)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (16,'Texas Instruments','supply@ti.com','555-1644',1,86)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (17,'Aptiv','contact@aptiv.com','555-1733',1,84)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (18,'Lear Corp','sales@lear.com','555-1822',1,83)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (19,'Harman Automotive','orders@harman.com','555-1911',1,82)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (20,'Acme Corp','sales@acme.example','555-2000',1,82)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (21,'NVIDIA Auto','sales@nvidia-auto.com','555-2100',1,95)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (22,'Intel Mobileye','orders@mobileye.com','555-2200',1,93)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (23,'Qualcomm Auto','supply@qualcomm.com','555-2300',1,90)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (24,'Brembo S.p.A.','sales@brembo.com','555-2400',1,89)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (25,'Ohlins Racing','orders@ohlins.com','555-2500',1,88)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (26,'Recaro Automotive','supply@recaro.com','555-2600',1,87)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (27,'Sparco','sales@sparco.com','555-2700',1,85)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (28,'Hella GmbH','orders@hella.com','555-2800',1,86)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (29,'Denso Corp','sales@denso.com','555-2900',1,88)")
-conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (30,'Aisin Seiki','supply@aisin.com','555-3000',1,84)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (1,'顶点工业供应','sales@vertexindustrial.com','555-0101',1,90)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (2,'新星元器件公司','sales@novacomponents.com','555-0102',1,88)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (3,'精密零件有限公司','orders@precisionparts.com','555-0103',1,85)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (4,'环球科技制造','orders@globaltechmfg.com','555-0104',1,87)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (5,'常青材料','sales@evergreenmats.com','555-0105',1,92)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (6,'顶峰电子','supply@summitelec.com','555-0106',1,89)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (7,'顶点五金集团','orders@apexhardware.com','555-0107',1,84)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (8,'蓝波机械','sales@bluewavemach.com','555-0108',1,83)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (9,'核联系统','orders@corelinksys.com','555-0109',1,86)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (10,'优选维保耗材','sales@primemro.com','555-0110',1,82)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (11,'哨兵安全设备','orders@sentinelsafety.com','555-0111',1,80)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (12,'欧米伽紧固件','supply@omegafasteners.com','555-0112',1,81)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (13,'泰坦办公方案','sales@titanoffice.com','555-0113',1,91)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (14,'地平线 IT 分销','orders@horizonit.com','555-0114',1,85)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (15,'瀑布物流装备','supply@cascadelogistics.com','555-0115',1,87)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (16,'顶点动力系统','sales@vertexpower.com','555-0116',1,86)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (17,'子午线控制','orders@meridiancontrols.com','555-0117',1,84)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (18,'阿特拉斯机械','sales@atlasmech.com','555-0118',1,83)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (19,'纽克斯自动化','orders@nexusautomation.com','555-0119',1,82)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (20,'顶点公司','sales@acme.example','555-0120',1,82)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (21,'量子计算硬件','sales@quantumhw.com','555-0121',1,95)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (22,'明途照明','orders@brightpathlight.com','555-0122',1,93)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (23,'猎鹰航空零件','supply@falconaero.com','555-0123',1,90)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (24,'恒星电机','sales@stellarmotors.com','555-0124',1,89)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (25,'山脊工具','orders@ridgelinetools.com','555-0125',1,88)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (26,'港湾货运供应','supply@harborsupply.com','555-0126',1,87)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (27,'先锋化工','sales@pioneerchem.com','555-0127',1,85)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (28,'猎户座机器人','orders@orionrobotics.com','555-0128',1,86)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (29,'太平洋包装','sales@pacificpack.com','555-0129',1,88)")
+conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (30,'铁甲轴承','supply@ironcladbearings.com','555-0130',1,84)")
 
 # ---------------- Items ----------------
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (1,'Lithium-ion Battery Pack 75kWh Model X','BAT-75KWH-X','unit',7500,1)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (2,'Lithium-ion Battery Pack 100kWh Model Y','BAT-100KWH-Y','unit',9500,2)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (3,'EV Motor 250kW Model X','MOTOR-250KW-X','unit',12000,4)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (4,'EV Motor 150kW Model Y','MOTOR-150KW-Y','unit',9000,4)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (5,'Onboard Charger 11kW Standard','CHGR-11KW-ST','unit',900,5)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (6,'Onboard Charger 22kW Fast','CHGR-22KW-FAST','unit',1400,5)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (7,'Inverter 400V Model X','INV-400V-X','unit',3000,6)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (8,'Inverter 800V Model Y','INV-800V-Y','unit',4500,6)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (9,'DC-DC Converter 12V for Model X','DC-DC-12V-X','unit',600,7)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (10,'High Voltage Cable 10m','CABLE-HV-10M','meter',50,7)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (11,'Thermal Management Pump Standard','PUMP-COOL-STD','unit',250,8)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (12,'Radiator for EV Model X','RAD-EV-X','unit',800,8)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (13,'Windshield Glass Model S Front','GLASS-MS-F','unit',500,9)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (14,'Windshield Glass Model X Front','GLASS-MX-F','unit',600,9)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (15,'Side Mirror Assembly Model S','MIRROR-SIDE-MS','unit',120,10)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (16,'Rear Camera Model X','CAM-REAR-X','unit',200,10)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (17,'Radar Sensor Front Model X','SENSOR-RADAR-F','unit',400,11)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (18,'LiDAR Sensor Roof Model Y','SENSOR-LIDAR-R','unit',1500,11)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (19,'Ultrasonic Sensor Side Model X','SENSOR-ULTRA-S','unit',80,12)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (20,'Steering Wheel Model X Sport','STEER-EV-SP','unit',250,12)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (21,'Driver Seat Assembly Model X','SEAT-DRV-X','unit',800,13)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (22,'Passenger Seat Assembly Model X','SEAT-PASS-X','unit',750,13)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (23,'Infotainment Display 15in Model X','DISP-INFO-15X','unit',1200,14)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (24,'Headlight LED Low Beam Model X','LIGHT-LED-LB-X','unit',300,14)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (25,'Taillight LED Model X','LIGHT-TAIL-X','unit',200,14)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (26,'Alloy Wheel 18in Model X','WHEEL-18-X','unit',400,15)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (27,'Alloy Wheel 20in Model Y','WHEEL-20-Y','unit',500,15)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (28,'Tire 18in Model X','TIRE-18-X','unit',150,16)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (29,'Tire 20in Model Y','TIRE-20-Y','unit',180,16)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (30,'Brake Pad Set Model X Front','BRAKE-PAD-FX','set',200,17)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (31,'Brake Disc Model X Rear','BRAKE-DISC-RX','unit',300,17)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (32,'Suspension Strut Model X Front','SUSP-STRUT-FX','unit',350,18)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (33,'Shock Absorber Model X Rear','SHOCK-ABS-RX','unit',320,18)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (34,'Wiring Harness Model X Front','WIRE-HARN-FX','set',500,19)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (35,'Software License ECU Model X','ECU-SW-LIC-X','unit',200,19)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (36,'Battery Management System 100kWh Model Y','BMS-CTRL-Y','unit',1500,2)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (37,'Charging Port CCS Model X','PORT-CCS-X','unit',600,3)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (38,'Charging Port CHAdeMO Model Y','PORT-CHD-Y','unit',550,3)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (39,'Heater Assembly Model X','HEATER-EV-X','unit',400,20)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (40,'Air Conditioning Unit Model X','AC-EV-X','unit',900,20)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (41,'Fuse High Voltage Model X','FUSE-HV-X','unit',40,6)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (42,'Relay High Voltage Model X','RELAY-HV-X','unit',60,6)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (43,'Washer Fluid Pump Model X','PUMP-WASH-X','unit',30,8)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (44,'Wiper Blade Set Model X Front','WIPER-BLD-FX','set',50,9)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (45,'Battery Cooling Plate Model X','BAT-COOL-X','unit',700,5)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (46,'Motor Cooling Jacket Model Y','MOTOR-COOL-Y','unit',800,5)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (47,'Seat Belt Assembly Model X','BELT-SEAT-X','unit',120,12)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (48,'Airbag Module Front Model X','AIRBAG-FR-X','unit',500,13)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (49,'Central Control Unit Model X','CCU-MAIN-X','unit',2200,19)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (50,'Telematics Control Unit Model X','TCU-CON-X','unit',1800,19)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (51,'GPU Module Drive Orin','GPU-ORIN-X','unit',1500,21)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (52,'Vision Processor EyeQ5','VIS-EYEQ5','unit',800,22)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (53,'Snapdragon Ride SoC','SOC-SD-RIDE','unit',1200,23)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (54,'Carbon Ceramic Brake Disc Front','BRAKE-CC-F','unit',2000,24)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (55,'Carbon Ceramic Brake Disc Rear','BRAKE-CC-R','unit',1800,24)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (56,'Performance Coilover Set','SUSP-COIL-perf','set',3500,25)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (57,'Sport Bucket Seat Alcantara','SEAT-SP-ALC','unit',1500,26)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (58,'Racing Harness 5-Point','BELT-RACE-5','unit',300,27)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (59,'Matrix LED Headlight Assembly','LIGHT-MTX-LED','unit',1200,28)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (60,'Alternator High Output','ALT-HO-12V','unit',400,29)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (61,'Transmission 8-Speed Auto','TRANS-8SP-AT','unit',4500,30)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (62,'Hybrid Power Control Unit','PCU-HYBRID','unit',2500,29)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (63,'Fuel Injection Pump High Pressure','PUMP-FUEL-HP','unit',600,29)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (64,'Turbocharger Electric Assist','TURBO-E-AST','unit',1800,10)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (65,'Exhaust Manifold Sport','EXH-MAN-SP','unit',450,18)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (66,'Catalytic Converter Euro 7','CAT-CONV-E7','unit',900,18)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (67,'Steering Rack Electric','STEER-RACK-E','unit',750,12)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (68,'Air Suspension Compressor','SUSP-COMP-AIR','unit',500,11)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (69,'Door Module Controller','MOD-DOOR-CTRL','unit',150,19)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (70,'Window Regulator Motor','MOTOR-WIN-REG','unit',80,19)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (71,'Sunroof Motor Assembly','MOTOR-SUN-ASM','unit',120,8)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (72,'Rain Sensor Module','SENSOR-RAIN','unit',40,11)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (73,'TPMS Sensor Set','SENSOR-TPMS-4','set',100,7)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (74,'Keyless Entry Fob','KEY-FOB-ENTRY','unit',80,7)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (75,'Ambient Lighting Kit','LIGHT-AMB-KIT','kit',200,14)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (76,'Floor Mat Set Premium','MAT-FLOOR-PREM','set',150,13)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (77,'Roof Rack Crossbars','RACK-ROOF-BAR','set',250,13)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (78,'Tow Hitch Assembly','HITCH-TOW-ASM','unit',400,15)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (79,'Mud Flap Set','FLAP-MUD-SET','set',60,15)")
-conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (80,'Car Cover Weatherproof','COVER-CAR-WP','unit',120,20)")
-# ---------------- Budgets (Expanded) ----------------
-conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('Battery Dept','2025-Q3',5000000,500000)")
-conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('Motor Assembly','2025-Q3',4000000,250000)")
-conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('Glass & Interiors','2025-Q3',2000000,100000)")
-conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('Electronics','2025-Q3',3000000,200000)")
-conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('Chassis & Wheels','2025-Q3',2000000,150000)")
-conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('R&D','2025-Q3',5000000,800000)")
-conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('Procurement','2025-Q3',1000000,100000)")
-conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('Engineering','2025-Q3',5000000,200000)")
-conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('IT','2025-Q3',3000000,150000)")
-conn.execute("INSERT OR IGNORE INTO budgets(dept,period,limit_amount,used_amount) VALUES ('Operations','2025-Q3',4000000,500000)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (1,'冷轧钢板 2mm','RAW-STEEL-2MM','sheet',45,5)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (2,'铝合金棒 6061','RAW-ALU-6061','bar',32,5)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (3,'铜线 12AWG 卷','RAW-CU-12AWG','roll',120,5)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (4,'聚碳酸酯树脂颗粒','RAW-PC-RESIN','kg',8,5)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (5,'不锈钢管 304','RAW-SS-TUBE','meter',28,5)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (6,'黄铜棒 C360','RAW-BRASS-360','meter',40,5)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (7,'工业润滑油 20L 桶','RAW-LUBE-20L','drum',85,27)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (8,'环氧粘合剂套件','RAW-EPOXY-KIT','kit',55,27)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (9,'单片机开发板 STM32','ELC-MCU-STM32','unit',25,6)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (10,'工业电源 24V 10A','ELC-PSU-24V','unit',65,16)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (11,'温度传感器模块','ELC-SENSOR-TEMP','unit',18,6)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (12,'7 寸触摸显示屏','ELC-DISP-7IN','unit',95,6)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (13,'伺服驱动控制器 48V','ELC-CTRL-48V','unit',150,17)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (14,'继电器模块 8 路','ELC-RELAY-8CH','unit',22,6)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (15,'高压保险丝 32A','ELC-FUSE-32A','unit',6,6)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (16,'工业变频器 3kW','ELC-INV-3KW','unit',480,16)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (17,'LED 指示灯面板','ELC-LED-PANEL','unit',14,22)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (18,'多针连接器套件','ELC-CONN-SET','set',30,6)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (19,'紧凑型 PLC 控制器','ELC-PLC-COMPACT','unit',720,17)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (20,'电子控制模块','ELC-MODULE-CTRL','unit',340,17)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (21,'交流感应电机 2.2kW','MEC-MOTOR-2KW','unit',380,24)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (22,'离心泵 5HP','MEC-PUMP-5HP','unit',520,8)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (23,'黄铜球阀 DN50','MEC-VALVE-DN50','unit',75,8)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (24,'深沟球轴承 6205','MEC-BEAR-6205','unit',12,30)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (25,'直齿轮 模数 2','MEC-GEAR-M2','unit',28,30)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (26,'弹性联轴器套件','MEC-COUPL-SET','set',45,30)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (27,'不锈钢紧固件套件 M6','MEC-FAST-M6','kit',35,12)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (28,'螺旋弹簧套装','MEC-SPRING-ASST','set',40,12)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (29,'镀锌安装支架','MEC-BRACK-GAL','unit',9,7)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (30,'液压缸 2T','MEC-CYL-2T','unit',640,8)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (31,'锂电池电芯 3.7V','ENE-CELL-3V7','unit',8,16)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (32,'单晶太阳能板 400W','ENE-SOLAR-400W','unit',210,16)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (33,'工业电池充电器','ENE-CHGR-IND','unit',350,16)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (34,'便携式发电机 3kW','ENE-GEN-3KW','unit',890,8)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (35,'无绳电钻','MFG-DRILL-CORD','unit',120,25)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (36,'CNC 铣刀套件','MFG-CNC-CUTTER','set',260,25)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (37,'工业砂轮','MFG-GRIND-WHEEL','unit',18,25)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (38,'电焊机 200A','MFG-WELD-200A','unit',540,25)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (39,'数显精密卡尺','MFG-CALIPER','unit',42,25)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (40,'气动冲击扳手','MFG-WRENCH-PNEU','unit',230,25)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (41,'6 寸台钳','MFG-VISE-6IN','unit',95,25)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (42,'切割炬套件','MFG-TORCH-KIT','kit',310,25)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (43,'工程软件授权','RND-SW-LICENSE','unit',1500,19)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (44,'3D 打印耗材 PLA','RND-FILAMENT-PLA','spool',22,19)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (45,'原型 PCB 批次','RND-PCB-PROTO','batch',180,6)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (46,'双通道示波器','RND-SCOPE-2CH','unit',620,19)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (47,'紧凑型实验室离心机','RND-CENTRIFUGE','unit',1150,19)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (48,'开发板套件','RND-DEV-KIT','kit',130,19)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (49,'暖通空气过滤器 20x20','ENG-FILTER-HVAC','unit',15,10)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (50,'ANSI 安全帽','ENG-HELMET','unit',12,11)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (51,'防割手套包','ENG-GLOVE-PACK','pack',25,11)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (52,'灭火器 5kg','ENG-EXTINGUISHER','unit',65,11)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (53,'橡胶垫片板','ENG-GASKET-RUB','sheet',8,27)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (54,'管道密封胶带','ENG-SEAL-TAPE','roll',3,27)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (55,'工业密封胶筒','ENG-SEALANT-CART','unit',9,27)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (56,'工业管道风机','ENG-FAN-DUCT','unit',140,10)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (57,'压力表 0-100psi','ENG-GAUGE-100','unit',28,10)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (58,'车间 LED 泛光灯','ENG-LIGHT-FLOOD','unit',55,22)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (59,'1U 机架服务器','IT-SERVER-1U','unit',3200,21)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (60,'14 寸商务笔记本','IT-LAPTOP-14','unit',1450,14)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (61,'企业级路由器','IT-ROUTER-ENT','unit',480,14)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (62,'24 口管理型交换机','IT-SWITCH-24','unit',620,14)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (63,'激光多功能一体机','IT-PRINTER-MFP','unit',380,13)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (64,'27 寸 IPS 显示器','IT-MONITOR-27','unit',260,14)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (65,'机械键盘','IT-KEYBOARD','unit',95,14)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (66,'4 盘位 NAS 存储','IT-NAS-4BAY','unit',720,21)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (67,'无线条码扫描枪','IT-SCANNER-WL','unit',140,14)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (68,'不间断电源 UPS','IT-UPS-1500','unit',210,16)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (69,'重型托盘 1200x1000','OPS-PALLET-HD','unit',22,29)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (70,'瓦楞纸箱 50 只装','OPS-BOX-PACK','pack',45,29)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (71,'仓库贴标机','OPS-LABEL-MACHINE','unit',180,13)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (72,'叉车替换轮胎','OPS-FORK-TIRE','unit',85,8)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (73,'输送滚筒 500mm','OPS-ROLLER-500','unit',30,8)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (74,'拉伸缠绕膜卷','OPS-WRAP-ROLL','roll',18,29)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (75,'人体工学办公椅','OFF-CHAIR-ERG','unit',320,13)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (76,'120cm 升降桌','OFF-DESK-120','unit',480,13)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (77,'A4 复印纸箱','OFF-PAPER-A4','box',28,13)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (78,'白板 120x90','OFF-WHITEBOARD','unit',65,13)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (79,'四斗文件柜','OFF-CABINET-4D','unit',240,13)")
+conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (80,'桌面文具套装','OFF-STATION-SET','set',35,13)")
 
 # ---------------- Policies ----------------
 conn.execute("INSERT OR IGNORE INTO policies(key,value) VALUES ('max_single_order_amount','100000')")
@@ -269,7 +256,6 @@ conn.execute("INSERT OR IGNORE INTO inventory(item_id, qty_on_hand, max_capacity
 
 # Update existing inventory limits to support more storage
 conn.execute("UPDATE inventory SET max_capacity = max_capacity * 2 WHERE item_id <= 50")
-conn.execute("UPDATE budgets SET limit_amount = limit_amount * 2")
 conn.execute("UPDATE policies SET value = '100000' WHERE key = 'max_single_order_amount'")
 
 
@@ -278,7 +264,7 @@ conn.execute("UPDATE policies SET value = '100000' WHERE key = 'max_single_order
 
 # ---------------- Mock Orders ----------------
 import csv
-CSV_PATH = Path(__file__).resolve().parents[1] / "refrence-forecast" / "mock_orders.csv"
+CSV_PATH = Path(__file__).resolve().parents[1] / "seed-data" / "mock_orders.csv"
 
 if CSV_PATH.exists():
     print(f"Loading mock orders from {CSV_PATH}...")
@@ -287,8 +273,8 @@ if CSV_PATH.exists():
         for row in reader:
             # order_id,order_date,item_id,vendor_id,quantity,unit_price,total_price
             conn.execute("""
-                INSERT OR IGNORE INTO orders (id, created_at, item_id, vendor_id, qty, amount)
-                VALUES (?, ?, ?, ?, ?, ?)
+                INSERT OR IGNORE INTO orders (id, created_at, item_id, vendor_id, qty, amount, status)
+                VALUES (?, ?, ?, ?, ?, ?, 'received')
             """, (
                 row['order_id'],
                 row['order_date'],

@@ -48,7 +48,7 @@ export function MessageBubble({ msg, onActionClick }: MessageBubbleProps) {
                         <details className="group">
                             <summary className="cursor-pointer p-3 flex items-center text-xs font-semibold text-muted-foreground hover:text-primary transition-colors bg-white/20 dark:bg-black/20">
                                 <div className="mr-2 h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                                View Neural Processing
+                                查看智能体处理过程
                             </summary>
                             <div className="p-4 bg-black/5 dark:bg-white/5 border-t border-white/10">
                                 <ul className="space-y-3">
@@ -75,7 +75,20 @@ export function MessageBubble({ msg, onActionClick }: MessageBubbleProps) {
                                     className="bg-blue-600/10 hover:bg-blue-600/20 text-blue-400 border-blue-500/30 font-medium"
                                     onClick={() => onActionClick && onActionClick(action)}
                                 >
-                                    {action.label || action.params?.label || "Execute Action"}
+                                    {action.label || action.params?.label || "执行操作"}
+                                </Button>
+                            </div>
+                        ))}
+
+                        {msg.ui_actions.filter((a: any) => a.action_type === 'navigate').map((action: any, i: number) => (
+                            <div key={`nav-${i}`} className="mt-3 flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="bg-purple-600/10 hover:bg-purple-600/20 text-purple-400 border-purple-500/30 font-medium"
+                                    onClick={() => onActionClick && onActionClick(action)}
+                                >
+                                    {action.params?.label || "前往查看"}
                                 </Button>
                             </div>
                         ))}

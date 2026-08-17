@@ -1,24 +1,21 @@
 import { useState, useEffect, useCallback } from "react";
-import { fetchOrdersPaginated, fetchOrdersSummary, type OrdersSummary } from "@/api/client";
-import { Card } from "@/components/ui/card";
+import { fetchOrdersPaginated, fetchOrdersSummary, deleteOrder, sendOrder, receiveOrder, cancelOrder, API_BASE_URL, type OrdersSummary } from "@/api/client";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import {
-    Loader2, Calendar, FileText, Download, Building,
-    DollarSign, Package, ShoppingCart, ChevronLeft, ChevronRight,
-    ChevronsLeft, ChevronsRight, Search, X
-} from "lucide-react";
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Loader2, Download, Search, Trash2, ShoppingCart, Send, CheckCircle2, XCircle } from "lucide-react";
 import { format } from "date-fns";
+import { Pagination } from "./Pagination";
 
 const PER_PAGE = 20;
 
 export function OrdersPage() {
     const [orders, setOrders] = useState<any[]>([]);
     const [isLoading, setIsLoading] = useState(true);
-    const [error, setError] = useState<string | null>(null);
-
-    // Pagination state
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [totalOrders, setTotalOrders] = useState(0);
@@ -26,310 +23,291 @@ export function OrdersPage() {
     const [searchInput, setSearchInput] = useState("");
     const [searchQuery, setSearchQuery] = useState("");
 
-    // Summary state (loaded once)
-    const [summary, setSummary] = useState<OrdersSummary | null>(null);
+    const [statusFilter, setStatusFilter] = useState("all");
+    const [minAmountInput, setMinAmountInput] = useState("");
+    const [maxAmountInput, setMaxAmountInput] = useState("");
+    const [dateFromInput, setDateFromInput] = useState("");
+    const [dateToInput, setDateToInput] = useState("");
+    const [minAmount, setMinAmount] = useState("");
+    const [maxAmount, setMaxAmount] = useState("");
+    const [dateFrom, setDateFrom] = useState("");
+    const [dateTo, setDateTo] = useState("");
 
-    // Load summary once
+    const [summary, setSummary] = useState<OrdersSummary | null>(null);
+    const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
     useEffect(() => {
         fetchOrdersSummary().then(setSummary).catch(() => { });
     }, []);
 
     const loadOrders = useCallback(async () => {
         setIsLoading(true);
-        setError(null);
         try {
-            const data = await fetchOrdersPaginated(
-                page,
-                PER_PAGE,
-                searchQuery || undefined,
-            );
+            const filters = {
+                status: statusFilter === "all" ? undefined : statusFilter,
+                min_amount: minAmount.trim() !== "" ? Number(minAmount) : undefined,
+                max_amount: maxAmount.trim() !== "" ? Number(maxAmount) : undefined,
+                date_from: dateFrom || undefined,
+                date_to: dateTo || undefined,
+            };
+            const data = await fetchOrdersPaginated(page, PER_PAGE, searchQuery || undefined, filters);
             setOrders(data.orders);
             setTotalPages(data.total_pages);
             setTotalOrders(data.total);
-        } catch (err: any) {
-            setError(err.message || "Failed to load orders");
+        } catch (e: any) {
+            setMessage({ type: "error", text: e.message });
         } finally {
             setIsLoading(false);
         }
-    }, [page, searchQuery]);
+    }, [page, searchQuery, statusFilter, minAmount, maxAmount, dateFrom, dateTo]);
 
-    useEffect(() => {
-        loadOrders();
-    }, [loadOrders]);
+    useEffect(() => { loadOrders(); }, [loadOrders]);
+    useEffect(() => { setPage(1); }, [searchQuery, statusFilter, minAmount, maxAmount, dateFrom, dateTo]);
 
-    // Reset to page 1 when filters change
-    useEffect(() => {
+    const handleSearch = () => setSearchQuery(searchInput.trim());
+
+    const applyFilters = () => {
+        setMinAmount(minAmountInput.trim());
+        setMaxAmount(maxAmountInput.trim());
+        setDateFrom(dateFromInput);
+        setDateTo(dateToInput);
         setPage(1);
-    }, [searchQuery]);
-
-    const handleSearch = () => {
-        setSearchQuery(searchInput.trim());
     };
 
-    const clearSearch = () => {
-        setSearchInput("");
-        setSearchQuery("");
+    const clearFilters = () => {
+        setStatusFilter("all");
+        setMinAmountInput("");
+        setMaxAmountInput("");
+        setDateFromInput("");
+        setDateToInput("");
+        setMinAmount("");
+        setMaxAmount("");
+        setDateFrom("");
+        setDateTo("");
+        setPage(1);
     };
 
+    const handleDelete = async (order: any) => {
+        if (!confirm(`确定删除订单 #${order.id} 吗？`)) return;
+        try {
+            await deleteOrder(order.id);
+            setMessage({ type: "success", text: `已删除订单 #${order.id}` });
+            await loadOrders();
+            fetchOrdersSummary().then(setSummary).catch(() => { });
+        } catch (e: any) {
+            setMessage({ type: "error", text: e.message });
+        }
+    };
+
+    const handleSend = async (order: any) => {
+        try {
+            const res = await sendOrder(order.id);
+            setMessage({ type: "success", text: res.message });
+            await loadOrders();
+        } catch (e: any) {
+            setMessage({ type: "error", text: e.message });
+        }
+    };
+
+    const handleReceive = async (order: any) => {
+        if (!confirm(`确认已收到订单 #${order.id} 的货物吗？确认后库存将增加。`)) return;
+        try {
+            const res = await receiveOrder(order.id);
+            setMessage({ type: "success", text: res.message });
+            await loadOrders();
+        } catch (e: any) {
+            setMessage({ type: "error", text: e.message });
+        }
+    };
+
+    const handleCancel = async (order: any) => {
+        if (!confirm(`确定取消订单 #${order.id} 吗？`)) return;
+        try {
+            const res = await cancelOrder(order.id);
+            setMessage({ type: "success", text: res.message });
+            await loadOrders();
+            fetchOrdersSummary().then(setSummary).catch(() => { });
+        } catch (e: any) {
+            setMessage({ type: "error", text: e.message });
+        }
+    };
+
+    const statusMap: Record<string, { label: string; cls: string }> = {
+        draft: { label: "草稿", cls: "bg-gray-500/10 text-gray-500" },
+        sent: { label: "已发送", cls: "bg-blue-500/10 text-blue-500" },
+        received: { label: "已完成", cls: "bg-emerald-500/10 text-emerald-500" },
+        cancelled: { label: "已取消", cls: "bg-red-500/10 text-red-500" },
+    };
 
     return (
-        <div className="flex h-full w-full overflow-hidden flex-col bg-white/30 dark:bg-black/20 backdrop-blur-md">
-            {/* Header */}
-            <div className="h-20 border-b border-white/20 px-8 flex items-center justify-between bg-white/40 dark:bg-black/40 backdrop-blur-xl z-10 shrink-0">
-                <div className="flex flex-col">
-                    <h1 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent flex items-center gap-3 tracking-tight">
-                        <ShoppingCart className="h-6 w-6 text-blue-500" />
-                        Purchase Orders Matrix
-                    </h1>
-                    <p className="text-sm text-muted-foreground mt-1">
-                        Cryptographically signed procurement history. Contextual routing and compliance validation active.
-                    </p>
-                </div>
-
-                <div className="flex items-center gap-6">
-                    <div className="flex items-center gap-4 bg-white/50 dark:bg-black/50 px-4 py-2 rounded-full border border-white/20 shadow-sm backdrop-blur-md">
-                        <div className="flex flex-col items-end">
-                            <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Total Volume</span>
-                            <span className="text-lg font-bold text-foreground">
-                                ${(summary?.total_volume ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                            </span>
-                        </div>
+        <div className="h-full flex flex-col">
+            {/* 工具栏 */}
+            <div className="p-4 border-b border-white/10 bg-white/20 dark:bg-black/10 shrink-0 flex items-center gap-4">
+                <div className="flex items-center gap-4">
+                    <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">总金额</span>
+                        <span className="text-lg font-bold">${(summary?.total_volume ?? 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                     </div>
-                    <div className="flex items-center gap-4 bg-white/50 dark:bg-black/50 px-4 py-2 rounded-full border border-white/20 shadow-sm backdrop-blur-md">
-                        <div className="flex flex-col items-end">
-                            <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider">Orders</span>
-                            <span className="text-lg font-bold text-foreground">
-                                {(summary?.total_count ?? 0).toLocaleString()}
-                            </span>
-                        </div>
+                    <div className="flex flex-col">
+                        <span className="text-xs text-muted-foreground">已完成订单数</span>
+                        <span className="text-lg font-bold">{(summary?.total_count ?? 0).toLocaleString()}</span>
                     </div>
                 </div>
-            </div>
 
-            {/* Filters Bar */}
-            <div className="px-8 py-3 flex items-center gap-4 border-b border-white/10 bg-white/20 dark:bg-black/10 shrink-0">
-                {/* Search */}
                 <div className="relative flex-1 max-w-sm">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <input
-                        type="text"
-                        placeholder="Search orders..."
+                    <Input
+                        placeholder="搜索订单号 / 物料 / 供应商..."
                         value={searchInput}
                         onChange={(e) => setSearchInput(e.target.value)}
                         onKeyDown={(e) => e.key === "Enter" && handleSearch()}
-                        className="w-full pl-9 pr-8 py-2 text-sm rounded-lg border border-white/20 bg-white/50 dark:bg-black/30 backdrop-blur-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 transition-all"
+                        className="pl-9 bg-white/50 dark:bg-black/30"
                     />
-                    {searchInput && (
-                        <button onClick={clearSearch} className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
-                            <X className="h-4 w-4" />
-                        </button>
-                    )}
                 </div>
-
-
-                {/* Page Info */}
-                <div className="ml-auto text-sm text-muted-foreground font-mono">
-                    Showing {orders.length} of {totalOrders.toLocaleString()} orders
-                </div>
+                <Button variant="outline" size="sm" onClick={handleSearch} className="shrink-0">查询</Button>
+                {message && (
+                    <span className={`text-sm ${message.type === "success" ? "text-emerald-600 dark:text-emerald-400" : "text-red-500"}`}>
+                        {message.text}
+                    </span>
+                )}
             </div>
 
-            {/* List */}
-            <ScrollArea className="flex-1 p-8">
-                <div className="max-w-6xl mx-auto space-y-4">
+            {/* 筛选栏 */}
+            <div className="px-4 py-2 border-b border-white/10 bg-white/10 dark:bg-black/5 shrink-0 flex items-center gap-3 flex-wrap">
+                <select
+                    className="h-9 px-3 bg-white/50 dark:bg-black/30 border border-white/20 rounded-md text-sm"
+                    value={statusFilter}
+                    onChange={(e) => setStatusFilter(e.target.value)}
+                    title="按状态筛选"
+                >
+                    <option value="all">全部状态</option>
+                    <option value="draft">草稿</option>
+                    <option value="sent">已发送</option>
+                    <option value="received">已完成</option>
+                    <option value="cancelled">已取消</option>
+                </select>
+                <Input
+                    type="number"
+                    placeholder="最小金额"
+                    value={minAmountInput}
+                    onChange={(e) => setMinAmountInput(e.target.value)}
+                    className="w-32 h-9 bg-white/50 dark:bg-black/30"
+                />
+                <Input
+                    type="number"
+                    placeholder="最大金额"
+                    value={maxAmountInput}
+                    onChange={(e) => setMaxAmountInput(e.target.value)}
+                    className="w-32 h-9 bg-white/50 dark:bg-black/30"
+                />
+                <Input
+                    type="date"
+                    value={dateFromInput}
+                    onChange={(e) => setDateFromInput(e.target.value)}
+                    className="w-40 h-9 bg-white/50 dark:bg-black/30"
+                    title="开始日期"
+                />
+                <Input
+                    type="date"
+                    value={dateToInput}
+                    onChange={(e) => setDateToInput(e.target.value)}
+                    className="w-40 h-9 bg-white/50 dark:bg-black/30"
+                    title="结束日期"
+                />
+                <Button size="sm" onClick={applyFilters} className="shrink-0 bg-blue-600 hover:bg-blue-500 text-white">筛选</Button>
+                <Button size="sm" variant="outline" onClick={clearFilters} className="shrink-0">清除</Button>
+            </div>
+
+            {/* 表格 */}
+            <ScrollArea className="flex-1">
+                <div className="p-6">
                     {isLoading ? (
-                        <div className="flex flex-col items-center justify-center p-20 text-muted-foreground space-y-4">
+                        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground gap-4">
                             <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-                            <p className="animate-pulse">Accessing neural ledger...</p>
-                        </div>
-                    ) : error ? (
-                        <div className="glass p-8 rounded-xl border border-red-500/20 text-red-500 flex flex-col items-center justify-center gap-4">
-                            <div className="p-4 bg-red-500/10 rounded-full">
-                                <FileText className="h-8 w-8 text-red-500" />
-                            </div>
-                            <p className="font-medium text-center">{error}</p>
-                            <Button variant="outline" onClick={loadOrders} className="mt-4 border-red-500/20 hover:bg-red-500/10 hover:text-red-500">
-                                Retry Connection
-                            </Button>
+                            <p className="text-sm">正在加载订单...</p>
                         </div>
                     ) : orders.length === 0 ? (
-                        <div className="flex flex-col items-center justify-center p-32 text-muted-foreground glass border border-white/10 rounded-2xl bg-black/5">
-                            <ShoppingCart className="h-16 w-16 mb-6 text-muted-foreground/30" />
-                            <h3 className="text-xl font-semibold mb-2 text-foreground/70">Ledger Empty</h3>
-                            <p className="max-w-sm text-center">No purchase orders found matching your criteria.</p>
+                        <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+                            <ShoppingCart className="h-12 w-12 mb-4 opacity-20" />
+                            <p className="text-lg font-medium">暂无订单</p>
                         </div>
                     ) : (
-                        <div className="grid gap-4">
-                            {orders.map((order) => (
-                                <Card
-                                    key={order.id}
-                                    className="group relative overflow-hidden glass border-white/20 hover:border-blue-500/30 transition-all duration-500 hover:shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:-translate-y-1 hover:bg-white/60 dark:hover:bg-black/60 p-0"
-                                >
-                                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500/80 shadow-[0_0_10px_rgba(59,130,246,0.5)]" />
-
-                                    <div className="p-6 ml-2 flex flex-col md:flex-row gap-6 md:items-center">
-
-                                        {/* ID */}
-                                        <div className="flex flex-row md:flex-col items-center md:items-start justify-between md:justify-center w-full md:w-32 shrink-0 border-b md:border-b-0 md:border-r border-black/5 dark:border-white/10 pb-4 md:pb-0 md:pr-6 gap-2">
-                                            <div className="flex flex-col">
-                                                <span className="text-xs text-muted-foreground font-mono uppercase tracking-wider mb-1">REQ-ID</span>
-                                                <span className="text-2xl font-black tracking-tighter text-foreground/80">#{order.id.toString().padStart(4, '0')}</span>
-                                            </div>
-                                        </div>
-
-                                        {/* Core Details */}
-                                        <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-
-                                            {/* Item */}
-                                            <div className="space-y-1.5">
-                                                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider flex items-center gap-1.5 opacity-70">
-                                                    <Package className="h-3 w-3" /> Material
-                                                </p>
-                                                <p className="font-semibold text-[15px] leading-tight text-foreground group-hover:text-blue-600 dark:group-hover:text-blue-400 transition-colors">
-                                                    {order.item_name || 'Unknown Item'}
-                                                </p>
-                                                <div className="flex items-center gap-2 mt-1">
-                                                    <Badge variant="secondary" className="bg-black/5 dark:bg-white/10 px-2 py-0 text-xs font-mono h-5 text-muted-foreground border-transparent">
-                                                        QTY: {order.qty}
-                                                    </Badge>
-                                                    {order.unit_price && (
-                                                        <span className="text-xs text-muted-foreground">@ ${order.unit_price} / ea</span>
+                        <div className="rounded-xl border border-white/10 overflow-hidden bg-white/40 dark:bg-black/30 backdrop-blur-sm">
+                            <Table>
+                                <TableHeader className="sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md">
+                                    <TableRow className="hover:bg-transparent border-b border-white/10">
+                                        <TableHead className="text-muted-foreground">单号</TableHead>
+                                        <TableHead className="text-muted-foreground">物料</TableHead>
+                                        <TableHead className="text-muted-foreground">数量</TableHead>
+                                        <TableHead className="text-muted-foreground">供应商</TableHead>
+                                        <TableHead className="text-muted-foreground">金额</TableHead>
+                                        <TableHead className="text-muted-foreground">日期</TableHead>
+                                        <TableHead className="text-muted-foreground">状态</TableHead>
+                                        <TableHead className="text-muted-foreground text-right">操作</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {orders.map((order) => (
+                                        <TableRow key={order.id} className="border-b border-white/5 hover:bg-white/5">
+                                            <TableCell className="font-mono font-bold text-foreground/80">#{order.id.toString().padStart(4, '0')}</TableCell>
+                                            <TableCell className="font-semibold">{order.item_name || '未知物品'}</TableCell>
+                                            <TableCell>
+                                                <Badge variant="secondary" className="bg-black/5 dark:bg-white/10 text-muted-foreground border-transparent">× {order.qty}</Badge>
+                                            </TableCell>
+                                            <TableCell className="text-muted-foreground">{order.vendor_name || '未知供应商'}</TableCell>
+                                            <TableCell className="font-mono text-emerald-600 dark:text-emerald-400">
+                                                ${(order.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                            </TableCell>
+                                            <TableCell className="text-xs text-muted-foreground">{format(new Date(order.created_at || new Date()), "yyyy-MM-dd")}</TableCell>
+                                            <TableCell>
+                                                <Badge variant="secondary" className={`${(statusMap[order.status] || statusMap.draft).cls} border-transparent`}>
+                                                    {(statusMap[order.status] || statusMap.draft).label}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    {order.pdf_path && (
+                                                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:bg-blue-500/10" asChild title="下载 PDF">
+                                                            <a href={`${API_BASE_URL}/static/orders/${order.pdf_path.split('/').pop()}`} target="_blank" rel="noopener noreferrer">
+                                                                <Download className="h-4 w-4" />
+                                                            </a>
+                                                        </Button>
                                                     )}
+                                                    {order.status === 'draft' && (
+                                                        <>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-500 hover:bg-blue-500/10" onClick={() => handleSend(order)} title="发送邮件给供应商">
+                                                                <Send className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-500 hover:bg-amber-500/10" onClick={() => handleCancel(order)} title="取消订单">
+                                                                <XCircle className="h-4 w-4" />
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                    {order.status === 'sent' && (
+                                                        <>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-emerald-500 hover:bg-emerald-500/10" onClick={() => handleReceive(order)} title="确认收货">
+                                                                <CheckCircle2 className="h-4 w-4" />
+                                                            </Button>
+                                                            <Button variant="ghost" size="icon" className="h-8 w-8 text-amber-500 hover:bg-amber-500/10" onClick={() => handleCancel(order)} title="取消订单">
+                                                                <XCircle className="h-4 w-4" />
+                                                            </Button>
+                                                        </>
+                                                    )}
+                                                    <Button variant="ghost" size="icon" className="h-8 w-8 text-red-400 hover:text-red-500 hover:bg-red-500/10" onClick={() => handleDelete(order)} title="删除">
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </Button>
                                                 </div>
-                                            </div>
-
-                                            {/* Vendor */}
-                                            <div className="space-y-1.5">
-                                                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider flex items-center gap-1.5 opacity-70">
-                                                    <Building className="h-3 w-3" /> Supplier
-                                                </p>
-                                                <p className="font-medium text-[15px] leading-tight text-foreground truncate max-w-full">
-                                                    {order.vendor_name || 'Unknown Vendor'}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground truncate w-full group-hover:text-foreground/80 transition-colors">
-                                                    {order.vendor_email || 'No email on file'}
-                                                </p>
-                                            </div>
-
-                                            {/* Financials & Dates */}
-                                            <div className="space-y-1.5">
-                                                <p className="text-xs text-muted-foreground font-mono uppercase tracking-wider flex items-center gap-1.5 opacity-70">
-                                                    <DollarSign className="h-3 w-3" /> Value
-                                                </p>
-                                                <p className="font-bold text-[15px] text-emerald-600 dark:text-emerald-400 tracking-tight">
-                                                    ${(order.amount || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                </p>
-                                                <p className="text-xs text-muted-foreground font-mono flex items-center gap-1.5 opacity-60">
-                                                    <Calendar className="h-3 w-3" />
-                                                    {format(new Date(order.created_at || new Date()), "MMM dd, yyyy")}
-                                                </p>
-                                            </div>
-                                        </div>
-
-                                        {/* Actions */}
-                                        <div className="w-full md:w-auto flex md:flex-col items-center justify-end gap-3 pt-4 md:pt-0 border-t md:border-t-0 border-black/5 dark:border-white/10 shrink-0 self-stretch md:pl-6">
-                                            {order.pdf_path ? (
-                                                <Button
-                                                    variant="default"
-                                                    className="w-full md:w-12 md:hover:w-32 group/btn relative overflow-hidden transition-all duration-300 bg-black hover:bg-gray-800 text-white dark:bg-white dark:text-black dark:hover:bg-gray-200 shadow-md"
-                                                    asChild
-                                                >
-                                                    <a href={`http://localhost:8000/static/orders/${order.pdf_path.split('/').pop()}`} target="_blank" rel="noopener noreferrer">
-                                                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none md:w-12 group-hover/btn:opacity-0 transition-opacity">
-                                                            <Download className="h-4 w-4" />
-                                                        </div>
-                                                        <span className="flex items-center gap-2 md:opacity-0 md:w-0 group-hover/btn:opacity-100 group-hover/btn:w-auto overflow-hidden whitespace-nowrap transition-all delay-75 pointer-events-none">
-                                                            <Download className="h-4 w-4 shrink-0" /> Open PDF
-                                                        </span>
-                                                    </a>
-                                                </Button>
-                                            ) : (
-                                                <div className="h-9 w-12 rounded-md border border-dashed border-black/10 dark:border-white/10 flex items-center justify-center group-hover:border-blue-500/20 transition-colors" title="No PDF generated">
-                                                    <FileText className="h-4 w-4 text-muted-foreground/30" />
-                                                </div>
-                                            )}
-                                        </div>
-
-                                    </div>
-                                </Card>
-                            ))}
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         </div>
                     )}
                 </div>
-
-                {/* Pagination Controls */}
-                {!isLoading && !error && totalPages > 1 && (
-                    <div className="max-w-6xl mx-auto mt-8 flex items-center justify-center gap-2">
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={page <= 1}
-                            onClick={() => setPage(1)}
-                            className="glass border-white/20 hover:border-blue-500/30"
-                        >
-                            <ChevronsLeft className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={page <= 1}
-                            onClick={() => setPage((p) => Math.max(1, p - 1))}
-                            className="glass border-white/20 hover:border-blue-500/30"
-                        >
-                            <ChevronLeft className="h-4 w-4" />
-                        </Button>
-
-                        <div className="flex items-center gap-1 px-2">
-                            {/* Show page numbers around current page */}
-                            {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                                let pageNum: number;
-                                if (totalPages <= 5) {
-                                    pageNum = i + 1;
-                                } else if (page <= 3) {
-                                    pageNum = i + 1;
-                                } else if (page >= totalPages - 2) {
-                                    pageNum = totalPages - 4 + i;
-                                } else {
-                                    pageNum = page - 2 + i;
-                                }
-                                return (
-                                    <Button
-                                        key={pageNum}
-                                        variant={pageNum === page ? "default" : "outline"}
-                                        size="sm"
-                                        onClick={() => setPage(pageNum)}
-                                        className={`w-9 h-9 ${pageNum === page
-                                            ? 'bg-blue-600 text-white hover:bg-blue-700'
-                                            : 'glass border-white/20 hover:border-blue-500/30'
-                                            }`}
-                                    >
-                                        {pageNum}
-                                    </Button>
-                                );
-                            })}
-                        </div>
-
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={page >= totalPages}
-                            onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                            className="glass border-white/20 hover:border-blue-500/30"
-                        >
-                            <ChevronRight className="h-4 w-4" />
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={page >= totalPages}
-                            onClick={() => setPage(totalPages)}
-                            className="glass border-white/20 hover:border-blue-500/30"
-                        >
-                            <ChevronsRight className="h-4 w-4" />
-                        </Button>
-                    </div>
-                )}
-                <div className="h-32" />
             </ScrollArea>
+
+            <Pagination page={page} totalPages={totalPages} total={totalOrders} onPageChange={setPage} />
         </div>
     );
 }

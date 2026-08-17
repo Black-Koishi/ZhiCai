@@ -16,7 +16,7 @@ class UIAction(BaseModel):
 
 
 class OrchestrationResponse(BaseModel):
-    decision: Literal["email", "compliance", "pdf", "unknown"] = Field(
+    decision: Literal["email", "compliance", "pdf", "supplier", "forecast", "unknown"] = Field(
         description="The routing decision for the orchestrator."
     )
     ui_actions: List[UIAction] = Field(
@@ -35,3 +35,23 @@ class EmailExtraction(BaseModel):
     days_available: int = Field(description="The number of days within which the items are needed.")
     priority: str = Field(description="Priority: 'High' (within 7 days), 'Medium' (7-30 days), or 'Low' (after 30 days)")
     summary: str = Field(description="A brief 1-sentence summary of the request.")
+    budget: Optional[float] = Field(default=None, description="The total budget for this procurement request.")
+
+
+class SupplierExtraction(BaseModel):
+    """供应商入驻：从自然语言提取的结构化供应商信息。"""
+    name: str = Field(description="供应商名称")
+    email: Optional[str] = Field(default=None, description="供应商邮箱")
+    phone: Optional[str] = Field(default=None, description="供应商电话")
+    category: Optional[str] = Field(default=None, description="主营品类/主营业务")
+    ext_score: int = Field(default=80, ge=0, le=100, description="初始评分 0-100")
+    review: str = Field(default="", description="审核意见（简体中文，1-2 句）")
+
+
+class ItemExtraction(BaseModel):
+    """物料建档：从自然语言提取的结构化物料信息。"""
+    name: str = Field(description="物料名称")
+    unit: Optional[str] = Field(default=None, description="计量单位")
+    unit_price: float = Field(default=0, description="单价")
+    vendor_name: Optional[str] = Field(default=None, description="默认供应商名称")
+    sku: Optional[str] = Field(default=None, description="SKU 编码")

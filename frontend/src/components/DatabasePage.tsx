@@ -105,7 +105,7 @@ export function DatabasePage() {
             setEditingRow(null); // close dialog
         } catch (error: any) {
             console.error("Failed to save row:", error);
-            setSaveError(error.message || "Failed to save changes. Please try again.");
+            setSaveError(error.message || "保存更改失败，请重试。");
         } finally {
             setIsSaving(false);
         }
@@ -115,7 +115,7 @@ export function DatabasePage() {
 
     const handleDeleteAll = async () => {
         if (!selectedTable || selectedTable !== 'email_analysis') return;
-        if (!confirm(`Are you sure you want to delete all records from ${selectedTable}? This cannot be undone.`)) return;
+        if (!confirm(`确定要删除 ${selectedTable} 中的所有记录吗？此操作不可撤销。`)) return;
 
         setIsDeletingData(true);
         try {
@@ -123,7 +123,7 @@ export function DatabasePage() {
             await fetchTableData(selectedTable);
         } catch (error: any) {
             console.error("Failed to delete table data:", error);
-            alert(error.message || "Failed to delete data. Please try again.");
+            alert(error.message || "删除数据失败，请重试。");
         } finally {
             setIsDeletingData(false);
         }
@@ -135,7 +135,7 @@ export function DatabasePage() {
             <div className="w-64 border-r border-white/10 bg-black/10 backdrop-blur-md flex flex-col items-center pt-6 space-y-2">
                 <div className="flex items-center gap-2 mb-4 text-primary px-6 w-full justify-start">
                     <Database className="h-5 w-5" />
-                    <h2 className="font-semibold tracking-wide">Schemas</h2>
+                    <h2 className="font-semibold tracking-wide">数据表</h2>
                 </div>
 
                 {isLoadingTables ? (
@@ -173,7 +173,7 @@ export function DatabasePage() {
                                 <span className="text-muted-foreground">SELECT * FROM</span>
                                 <span className="text-primary">{selectedTable}</span>
                             </>
-                        ) : "Select a table"}
+                        ) : "选择一张表"}
                     </h1>
 
                     {selectedTable === 'email_analysis' && data.length > 0 && (
@@ -185,7 +185,7 @@ export function DatabasePage() {
                             disabled={isDeletingData || isLoadingData}
                         >
                             {isDeletingData ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                            Delete Analysis Data
+                            删除分析数据
                         </Button>
                     )}
                 </div>
@@ -196,11 +196,11 @@ export function DatabasePage() {
                         {isLoadingData ? (
                             <div className="flex flex-col items-center justify-center p-20 text-muted-foreground space-y-4">
                                 <Loader2 className="h-8 w-8 animate-spin" />
-                                <p>Querying {selectedTable}...</p>
+                                <p>正在查询 {selectedTable}...</p>
                             </div>
                         ) : data.length === 0 ? (
                             <div className="flex items-center justify-center p-20 text-muted-foreground border border-dashed border-white/10 rounded-xl bg-black/20">
-                                No records found in {selectedTable}.
+                                {selectedTable} 中没有记录。
                             </div>
                         ) : (
                             <Card className="glass overflow-hidden border-white/10">
@@ -259,7 +259,7 @@ export function DatabasePage() {
                 {data.length > 0 && !isLoadingData && (
                     <div className="absolute bottom-6 right-8 pointer-events-none">
                         <div className="glass px-4 py-2 rounded-full border border-white/20 text-xs font-mono text-muted-foreground shadow-lg backdrop-blur-xl pointer-events-auto">
-                            {data.length} row{data.length !== 1 ? 's' : ''} retrieved
+                            已检索 {data.length} 条记录
                         </div>
                     </div>
                 )}
@@ -267,14 +267,14 @@ export function DatabasePage() {
 
             {/* Edit Dialog */}
             <Dialog open={!!editingRow} onOpenChange={(open) => !open && setEditingRow(null)}>
-                <DialogContent className="sm:max-w-[600px] glass border-white/20 max-h-[80vh] overflow-hidden flex flex-col p-0">
+                <DialogContent className="sm:max-w-[600px] bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-white/20 max-h-[80vh] overflow-hidden flex flex-col p-0">
                     <DialogHeader className="p-6 pb-2">
                         <DialogTitle className="flex items-center gap-2">
                             <Database className="h-5 w-5 text-primary" />
-                            Edit Row in <span className="font-mono text-primary">{selectedTable}</span>
+                            在 <span className="font-mono text-primary">{selectedTable}</span> 中编辑行
                         </DialogTitle>
                         <DialogDescription>
-                            Make changes to the selected record. Avoid changing primary keys to prevent constraint errors.
+                            修改所选记录。请勿修改主键以免引发约束错误。
                         </DialogDescription>
                     </DialogHeader>
 
@@ -310,7 +310,7 @@ export function DatabasePage() {
                                 disabled={isSaving}
                                 className="mr-2"
                             >
-                                <X className="mr-2 h-4 w-4" /> Cancel
+                                <X className="mr-2 h-4 w-4" /> 取消
                             </Button>
                             <Button
                                 onClick={handleSave}
@@ -318,7 +318,7 @@ export function DatabasePage() {
                                 className="bg-primary hover:bg-primary/80 text-white"
                             >
                                 {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
-                                Save Changes
+                                保存更改
                             </Button>
                         </DialogFooter>
                     </div>

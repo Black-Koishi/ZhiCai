@@ -4,15 +4,16 @@ import { cn } from "@/lib/utils"
 import { LucideIcon } from "lucide-react"
 
 interface NavItemProps {
-    view: "home" | "emails" | "settings" | "dashboard" | "docs" | "database" | "new_order" | "orders" | "forecast";
+    view: "home" | "emails" | "settings" | "dashboard" | "new_order" | "orders" | "forecast";
     icon: LucideIcon;
     label: string;
-    activeView: "home" | "emails" | "settings" | "dashboard" | "docs" | "database" | "new_order" | "orders" | "forecast";
-    setActiveView: (view: "home" | "emails" | "settings" | "dashboard" | "docs" | "database" | "new_order" | "orders" | "forecast") => void;
+    activeView: "home" | "emails" | "settings" | "dashboard" | "new_order" | "orders" | "forecast";
+    setActiveView: (view: "home" | "emails" | "settings" | "dashboard" | "new_order" | "orders" | "forecast") => void;
     isCollapsed: boolean;
+    badge?: number;
 }
 
-export function NavItem({ view, icon: Icon, label, activeView, setActiveView, isCollapsed }: NavItemProps) {
+export function NavItem({ view, icon: Icon, label, activeView, setActiveView, isCollapsed, badge }: NavItemProps) {
     const isActive = activeView === view;
     return (
         <TooltipProvider delayDuration={0}>
@@ -31,6 +32,14 @@ export function NavItem({ view, icon: Icon, label, activeView, setActiveView, is
                     >
                         <Icon className={cn("h-5 w-5 z-10", isCollapsed ? "mr-0" : "mr-3", isActive && "text-primary fill-primary/10")} />
                         {!isCollapsed && <span className="z-10">{label}</span>}
+                        {!isCollapsed && badge != null && badge > 0 && (
+                            <span className="ml-auto z-10 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold">
+                                {badge > 99 ? "99+" : badge}
+                            </span>
+                        )}
+                        {isCollapsed && badge != null && badge > 0 && (
+                            <span className="absolute top-2 right-2 z-10 h-2 w-2 rounded-full bg-red-500" />
+                        )}
                         {isActive && <div className="absolute left-0 top-0 bottom-0 w-1 bg-primary rounded-r-full" />}
                     </Button>
                 </TooltipTrigger>

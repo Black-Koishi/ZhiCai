@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send } from "lucide-react";
+import { Send, Bot, Mail, ShieldCheck, ShoppingCart, Sparkles, Star } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -50,18 +50,17 @@ export function ChatInterface({
         }
     }, [messages, currentSteps, isLoading]);
 
-    const handleSubmit = async (e: React.FormEvent) => {
-        e.preventDefault();
-        if (!input.trim() || isLoading) return;
+    const submitMessage = async (text: string) => {
+        if (!text.trim() || isLoading) return;
 
-        const userMessage = input;
+        const userMessage = text.trim();
         setInput("");
         setMessages(prev => [...prev, { role: 'user', content: userMessage }]);
         setIsLoading(true);
         setCurrentSteps([]);
 
         // simulate orchestrator thinking start
-        setCurrentSteps(["Orchestrator: Analyzing input..."]);
+        setCurrentSteps(["编排器：正在分析输入..."]);
 
         try {
             const response = await sendMessage({
@@ -91,18 +90,63 @@ export function ChatInterface({
             setCurrentSteps([]);
 
         } catch (error) {
-            setMessages(prev => [...prev, { role: 'assistant', content: "Error: Failed to process request." }]);
+            setMessages(prev => [...prev, { role: 'assistant', content: "错误：处理请求失败。" }]);
         } finally {
             setIsLoading(false);
             setCurrentSteps([]);
         }
     };
 
+    const handleSubmit = (e: React.FormEvent) => {
+        e.preventDefault();
+        submitMessage(input);
+    };
+
+    const suggestions = [
+        { icon: Mail, text: "分析邮件", desc: "解析收件箱中的采购需求" },
+        { icon: ShieldCheck, text: "运行合规检查", desc: "审核已分析的采购请求" },
+        { icon: Star, text: "显示高优先级邮件", desc: "跳转邮件并筛选高优先级" },
+        { icon: ShoppingCart, text: "查看订单", desc: "跳转采购订单列表" },
+    ];
+
     return (
         <div className="flex flex-col h-full bg-transparent">
             {/* Messages Area */}
             <ScrollArea className="flex-1 px-4 py-6">
                 <div className="max-w-4xl mx-auto space-y-8">
+                    {messages.length === 0 && !isLoading && (
+                        <div className="flex flex-col items-center justify-center text-center py-16 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                            <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-blue-600 to-cyan-500 flex items-center justify-center shadow-lg shadow-blue-500/25 mb-6">
+                                <Bot className="h-8 w-8 text-white" />
+                            </div>
+                            <h2 className="text-2xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent">
+                                智采 ZhiCai
+                            </h2>
+                            <p className="text-muted-foreground mt-2">AI 多智能体采购助手</p>
+                            <p className="text-sm text-muted-foreground/70 mt-1 max-w-md">
+                                用自然语言管理采购全流程：邮件分析、合规审核、订单管理、需求预测。
+                            </p>
+
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground/60 mt-10">
+                                <Sparkles className="h-3.5 w-3.5" />
+                                点击下方指令快速开始
+                            </div>
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-4 w-full max-w-2xl">
+                                {suggestions.map((s) => (
+                                    <button
+                                        key={s.text}
+                                        onClick={() => submitMessage(s.text)}
+                                        className="group flex flex-col items-start gap-1.5 p-4 rounded-xl text-left bg-white/40 dark:bg-black/30 backdrop-blur-sm border border-white/20 dark:border-white/10 hover:border-blue-500/40 hover:bg-white/60 dark:hover:bg-black/50 transition-all duration-200 hover:-translate-y-0.5"
+                                    >
+                                        <s.icon className="h-5 w-5 text-blue-500 group-hover:text-cyan-500 transition-colors" />
+                                        <span className="text-sm font-medium text-foreground">{s.text}</span>
+                                        <span className="text-xs text-muted-foreground/70">{s.desc}</span>
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
                     {messages.map((msg, index) => (
                         <MessageBubble key={index} msg={msg} onActionClick={onUIAction} />
                     ))}
@@ -125,7 +169,7 @@ export function ChatInterface({
                         <Input
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
-                            placeholder="Type a number or text..."
+                            placeholder="请输入内容..."
                             className="flex-1 bg-transparent !border-none !shadow-none !ring-0 !outline-none focus-visible:ring-0 focus-visible:ring-offset-0 text-base py-6 placeholder:text-muted-foreground/70"
                             disabled={isLoading}
                         />
@@ -140,7 +184,7 @@ export function ChatInterface({
                     </form>
                 </div>
                 <div className="text-center mt-2">
-                    <span className="text-[10px] text-muted-foreground/50 uppercase tracking-widest">AI Powered Neural Converter</span>
+                    <span className="text-[10px] text-muted-foreground/50 uppercase tracking-widest">智采 ZhiCai · AI 多智能体采购平台</span>
                 </div>
             </div>
         </div>

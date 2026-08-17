@@ -1,12 +1,12 @@
 import pandas as pd
 import json
-from prophet import Prophet
 import sqlite3
+import threading
 from pathlib import Path
 import os
 import ollama
 
-from backend.agents.config import get_current_model
+from backend.agents.config import get_current_model, OLLAMA_BASE_URL
 
 # DB Path matching database.py
 DB_DIR = Path(__file__).resolve().parent / "data"
@@ -27,12 +27,14 @@ def analyze_seasonality():
         conn.close()
         
         if df.empty:
-             return {"error": "No orders found in database to analyze."}
+             return {"error": "数据库中没有可用于分析的订单。"}
 
         df['created_at'] = pd.to_datetime(df['created_at'], format='mixed')
         
         # Aggregate quantity by item and month
-        df['month'] = df['created_at'].dt.strftime('%B')
+        month_names = {1: '1月', 2: '2月', 3: '3月', 4: '4月', 5: '5月', 6: '6月',
+                       7: '7月', 8: '8月', 9: '9月', 10: '10月', 11: '11月', 12: '12月'}
+        df['month'] = df['created_at'].dt.month.map(month_names)
         df['month_num'] = df['created_at'].dt.month
         
         monthly_sales = df.groupby(['name', 'month', 'month_num'])['qty'].sum().reset_index()
@@ -54,7 +56,7 @@ def analyze_seasonality():
                 if avg_sales > 0:
                     pct_increase = ((peak_sales - avg_sales) / avg_sales) * 100
                     if pct_increase > 25: # Strong seasonal trend threshold
-                        findings[item] = f"Demand spikes in {peak_month}, increasing by {pct_increase:.0f}% compared to the monthly average."
+                        findings[item] = f"需求在 {peak_month} 激增，较月度平均增长 {pct_increase:.0f}%。"
                         
         # Prophet trend decomposition on aggregate daily store sales
         chart_data = [] # Data array specifically for Recharts
@@ -64,10 +66,7 @@ def analyze_seasonality():
         if not top_items_data.empty:
             pivot = top_items_data.pivot_table(index='month_num', columns='name', values='qty', aggfunc='sum').fillna(0)
             
-            # Month mapping
-            month_names = {1: 'Jan', 2: 'Feb', 3: 'Mar', 4: 'Apr', 5: 'May', 6: 'Jun', 
-                           7: 'Jul', 8: 'Aug', 9: 'Sep', 10: 'Oct', 11: 'Nov', 12: 'Dec'}
-                           
+            # Month mapping (reuse month_names defined above)
             for month_num in pivot.index:
                 row_dict = {"name": month_names.get(month_num, str(month_num))}
                 for col in pivot.columns:
@@ -75,6 +74,7 @@ def analyze_seasonality():
                 chart_data.append(row_dict)
                 
         try:
+            from prophet import Prophet  # lazy import: Prophet 1.1.5 is incompatible with NumPy 2.x
             daily_sales = df.groupby(df['created_at'].dt.date)['qty'].sum().reset_index()
             daily_sales.columns = ['ds', 'y']
             
@@ -87,17 +87,17 @@ def analyze_seasonality():
                 
                 trend_start = forecast['trend'].iloc[0]
                 trend_end = forecast['trend'].iloc[-1]
-                trend_direction = "upward" if trend_end > trend_start else "downward"
+                trend_direction = "上升" if trend_end > trend_start else "下降"
                 pct_change = abs((trend_end - trend_start) / trend_start) * 100 if trend_start != 0 else 0
                 
-                findings["Overall Store Trend"] = f"Prophet analysis shows an {trend_direction} volume trend of {pct_change:.0f}% over the analyzed period."
+                findings["整体店铺趋势"] = f"Prophet 分析显示，分析周期内销量呈 {trend_direction} 趋势，变化幅度为 {pct_change:.0f}%。"
         except Exception as e:
             pass # Silently drop if Prophet fails on small datasets
             
         return {"findings": findings, "chart_data": chart_data}
 
     except Exception as e:
-        return {"error": f"Failed to analyze data: {str(e)}"}
+        return {"error": f"分析数据失败：{str(e)}"}
 
 
 def generate_forecast_report():
@@ -105,7 +105,7 @@ def generate_forecast_report():
     analysis_result = analyze_seasonality()
     
     if "error" in analysis_result:
-        return _generate_error_md("Data Analysis Error", analysis_result["error"])
+        return _generate_error_md("数据分析错误", analysis_result["error"])
 
     stats_data = analysis_result.get("findings", {})
     chart_data = analysis_result.get("chart_data", [])
@@ -116,22 +116,24 @@ def generate_forecast_report():
     model_name = get_current_model("forecast")
     
     try:
-        client = ollama.Client() # Assumes default localhost:11434
+        client = ollama.Client(host=OLLAMA_BASE_URL)
         
         system_prompt = (
-            "You are a highly analytical structural agent. Your task is to process the raw Prophet data into a structured JSON payload.\n"
-            "Return strictly a JSON object with the following exact schema:\n"
+            "你是一个高度分析性的结构化智能体。你的任务是将原始 Prophet 数据处理成结构化的 JSON 载荷。\n"
+            "严格返回符合以下精确 schema 的 JSON 对象：\n"
             "{\n"
-            '  "executive_summary": "A comprehensive 2-3 sentence strategic executive overview string.",\n'
-            '  "overall_trend": {"direction": "upward/downward", "percentage": "number as string", "analysis": "Detailed commentary string"},\n'
+            '  "executive_summary": "一段 2-3 句的战略性执行概览字符串（简体中文）",\n'
+            '  "overall_trend": {"direction": "upward/downward", "percentage": "数字字符串", "analysis": "详细评述字符串（简体中文）"},\n'
             '  "anomalies": [\n'
-            '    {"item": "string", "insight": "string explaining what this means", "recommended_action": "Actionable procurement step", "severity": "High/Medium/Low"}\n'
+            '    {"item": "字符串", "insight": "解释其含义的字符串（简体中文）", "recommended_action": "可执行的采购建议（简体中文）", "severity": "High/Medium/Low"}\n'
             "  ]\n"
             "}\n"
-            "Do not output markdown, NO code block wrappers, only the raw JSON."
+            "不要输出 markdown，不要用代码块包裹，只输出原始 JSON。JSON 键名保持英文，所有文本值使用简体中文。\n"
+            "月份一律使用中文（如「12月」「1月」），严禁输出英文月份（如 December、January）。\n"
+            'overall_trend.percentage 必须是纯数字（如 "12.5"），不要带百分号 "%"。'
         )
         
-        user_prompt = f"Please map the following statistical data into the rigid JSON schema:\n\n{stats_json}"
+        user_prompt = f"请将以下统计数据映射到严格的 JSON schema 中（文本值使用简体中文）：\n\n{stats_json}"
         
         response = client.chat(
             model=model_name,
@@ -168,7 +170,7 @@ def generate_forecast_report():
         }
         
     except Exception as e:
-        err_dict = _generate_error_md("Ollama Agent Error", f"Could not connect to Ollama or process prompt. Details: {str(e)}")
+        err_dict = _generate_error_md("Ollama 智能体错误", f"无法连接 Ollama 或处理提示。详情：{str(e)}")
         err_dict["stats_json"] = stats_json
         return err_dict
 
@@ -176,7 +178,47 @@ def _generate_error_md(title, message):
     """Helper to generate a styled error block as a proper response dict."""
     md = f"""# ❌ {title}
 
-**Error Details:**
+**错误详情：**
 {message}
 """
     return {"error": True, "markdown": md.strip()}
+
+
+# ── 后台预测生成状态 ──────────────────────────────
+_forecast_status = {"state": "idle"}  # idle | generating | done | error
+
+
+def get_forecast_status() -> dict:
+    """返回当前后台预测生成状态。"""
+    return _forecast_status
+
+
+def _run_forecast_and_save():
+    """在后台线程中生成预测并落库。"""
+    global _forecast_status
+    _forecast_status = {"state": "generating"}
+    try:
+        result = generate_forecast_report()
+        if result.get("error") is True:
+            _forecast_status = {"state": "error", "message": result.get("markdown", "预测生成失败")}
+            return
+
+        from backend.database import save_forecast
+        chart_data_json = json.dumps(result.get("chart_data", []))
+        save_forecast(
+            result.get("stats_json", "{}"),
+            result.get("markdown", ""),
+            chart_data_json,
+        )
+        _forecast_status = {"state": "done"}
+    except Exception as e:
+        _forecast_status = {"state": "error", "message": str(e)}
+
+
+def start_forecast_generation() -> bool:
+    """启动后台预测生成线程；若已在生成中则返回 False。"""
+    if _forecast_status.get("state") == "generating":
+        return False
+    t = threading.Thread(target=_run_forecast_and_save, daemon=True)
+    t.start()
+    return True

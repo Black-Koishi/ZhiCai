@@ -2,9 +2,7 @@ langchain
 langchain-community
 langchain-ollama
 langgraph
-streamlit
 ollama
-playwright
 pytest
 # Data Analysis & Forecasting
 pandas==2.2.0
