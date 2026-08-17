@@ -133,7 +133,7 @@ def generate_order_pdf(order: dict, output_dir: str = "orders") -> str:
     pdf.line(20, pdf.get_y(), 190, pdf.get_y())
     pdf.ln(6)
 
-    # ── LLM-Generated PO Body ───────────────────
+    # ── 固定模板生成的采购订单正文 ───────────────
     pdf.set_font(font_name, "B", 11)
     pdf.cell(0, 8, text="采购订单详情")
     pdf.ln(8)
