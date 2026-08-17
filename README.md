@@ -8,7 +8,7 @@
 
 | 能力 | 说明 |
 |---|---|
-| 🧠 多智能体编排 | 基于 LangGraph 的状态机：编排器（Orchestrator）解析意图并路由到邮件 / 合规 / 订单 / 预测智能体 |
+| 🧠 多智能体编排 | 基于 LangGraph 的状态机：编排器（Orchestrator）解析意图并路由到邮件 / 合规 / 供应商 / 订单 / 预测智能体 |
 | 📧 邮件智能分析 | LLM 从非结构化邮件正文中提取物品、数量、交期、优先级，并自动匹配到物料与供应商目录 |
 | 🛡️ 合规守门 | 规则引擎（库存容量 / 采购政策 / 供应商评分）+ LLM 生成可读的审核解释 |
 | 📄 采购订单 PDF | 固定模板自动生成采购订单正文，fpdf2 渲染中文 PDF，支持一键下载 |
@@ -107,18 +107,24 @@ multi-agent-ai-v2/
 │   │   ├── email_analyzer.py   # 邮件结构化提取
 │   │   ├── compliance.py       # 合规守门 + 解释
 │   │   ├── pdf_generator.py    # 采购订单 PDF
+│   │   ├── supplier_onboarding.py # 供应商入驻
+│   │   ├── item_onboarding.py  # 物料建档
 │   │   ├── config.py           # 统一 LLM 配置
 │   │   └── models.py           # Pydantic 数据模型
 │   ├── data/                   # SQLite 数据库（gitignored）
 │   ├── services/               # 业务服务层（供 graph 与 REST 共用）
 │   │   ├── orders.py           # 订单 + PDF
 │   │   ├── emails.py           # 邮件分析
-│   │   └── compliance.py       # 合规检查
+│   │   ├── compliance.py       # 合规检查
+│   │   ├── suppliers.py        # 供应商
+│   │   └── items.py            # 物料
 │   ├── routers/                # API 路由（按业务域拆分）
 │   │   ├── chat.py             # 对话 / 健康检查
 │   │   ├── emails.py           # 邮件
 │   │   ├── database.py         # 数据库浏览
 │   │   ├── orders.py           # 订单
+│   │   ├── items.py            # 物料
+│   │   ├── suppliers.py        # 供应商
 │   │   ├── forecast.py         # 预测
 │   │   ├── procurement.py      # 采购流程
 │   │   └── settings.py         # 设置
@@ -138,7 +144,11 @@ multi-agent-ai-v2/
 │   └── vite.config.ts
 ├── scripts/
 │   ├── db_init.py              # 建表 + 种子数据
-│   └── evaluate_forecast.py    # 预测模型评估（MAE/RMSE/MAPE）
+│   ├── evaluate_forecast.py    # 预测模型评估（MAE/RMSE/MAPE）
+│   ├── zh_catalog.py           # 目录翻译为中文
+│   ├── zh_seed.py              # 种子数据中文化
+│   ├── insert_test_email.py    # 插入测试邮件
+│   └── deliver_mock_email.py   # 投递模拟邮件到 Mailpit
 ├── seed-data/
 │   └── mock_orders.csv         # 历史订单种子数据
 ├── orders/                     # 生成的采购订单 PDF（gitignored）
@@ -189,7 +199,7 @@ multi-agent-ai-v2/
 - [x] 商品目录泛化（通用采购/供应链：80 物料 + 30 供应商）
 - [x] 抽取公共「订单 + PDF」服务，消除重复逻辑
 - [x] CORS 收敛到环境变量配置
-- [x] 拆分单体 `api.py` 为模块化路由（7 个业务域 router）
+- [x] 拆分单体 `api.py` 为模块化路由（9 个业务域 router）
 - [x] 统一邮件 / 合规 / PDF 的两条执行路径（graph vs REST，抽取共享服务）
 - [ ] 完善的 pytest 测试套件
 - [ ] Docker 一键部署
