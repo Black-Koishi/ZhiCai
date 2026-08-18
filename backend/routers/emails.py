@@ -44,6 +44,19 @@ class IgnoreEmailRequest(BaseModel):
     reason: str = ""
 
 
+@router.get("/emails/unanalyzed-count")
+async def unanalyzed_count():
+    """返回当前待分析（收件箱中未分析）的邮件数量，供前端先提示再分析。
+
+    注意：必须定义在 /emails/{folder} 之前，否则会被 {folder} 匹配到。
+    """
+    try:
+        count = len(get_unanalyzed_emails())
+        return {"status": "success", "count": count}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/emails/{folder}", response_model=list[EmailItem])
 async def get_emails(folder: str, limit: int = 20):
     try:

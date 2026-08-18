@@ -69,6 +69,7 @@ async def manual_compliance_check(payload: dict):
         "status": "success",
         "passed": result["passed"],
         "explanation": result["explanation"],
+        "review": result["review"],
         "total_cost": total_cost,
         "fake_analysis_context": fake_analysis,
     }
@@ -105,9 +106,32 @@ async def check_compliance(email_id: str):
         save_compliance_explanation(email_id, result["explanation"])
         set_email_analysis_status(email_id, "pending_review" if result["passed"] else "failed_compliance")
 
+        # 合规未通过：直接把原因通知发件人，无需人工填写
+        if not result["passed"]:
+            await asyncio.to_thread(send_cancel_notification, email_id, result["explanation"])
+
         return {"status": "success", "passed": result["passed"], "explanation": result["explanation"], "review": result["review"]}
     except HTTPException as he:
         raise he
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/procurement/{email_id}/cancel")
+async def cancel_procurement_request(email_id: str, payload: dict):
+    """人工最终审核未通过（待审核阶段）：填写原因发给发件人，并标记为「未通过」。"""
+    reason = (payload.get("reason") or "").strip()
+    if not reason:
+        raise HTTPException(status_code=400, detail="请填写未通过原因")
+
+    try:
+        set_email_analysis_status(email_id, "failed_compliance")
+        # 人工原因与 AI 评审共用同一个字段存储，便于统一展示
+        save_compliance_explanation(email_id, reason)
+        notified = await asyncio.to_thread(send_cancel_notification, email_id, reason)
+        return {"status": "success", "email_id": email_id, "notified": notified, "message": "采购需求未通过"}
+    except HTTPException:
+        raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -151,6 +175,9 @@ async def compliance_by_item_name(payload: dict):
     save_compliance_explanation(analysis["email_id"], result["explanation"])
     set_email_analysis_status(analysis["email_id"], "pending_review" if result["passed"] else "failed_compliance")
 
+    if not result["passed"]:
+        await asyncio.to_thread(send_cancel_notification, analysis["email_id"], result["explanation"])
+
     return {
         "status": "success",
         "item_name": analysis.get("item_name"),
@@ -189,25 +216,6 @@ async def order_by_item_name(payload: dict):
         **result,
         "message": f"订单 #{result['order_id']} 已创建并生成 PDF。",
     }
-
-
-@router.post("/procurement/{email_id}/cancel")
-async def cancel_procurement_request(email_id: str, payload: dict):
-    """人工审核未通过：填写未通过原因，发给发件人。"""
-    reason = (payload.get("reason") or "").strip()
-    if not reason:
-        raise HTTPException(status_code=400, detail="请填写未通过原因")
-
-    try:
-        set_email_analysis_status(email_id, "failed_compliance")
-        # 人工原因与 AI 评审共用同一个字段存储，便于统一展示
-        save_compliance_explanation(email_id, reason)
-        notified = await asyncio.to_thread(send_cancel_notification, email_id, reason)
-        return {"status": "success", "email_id": email_id, "notified": notified, "message": "采购需求已取消"}
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/items/lookup")

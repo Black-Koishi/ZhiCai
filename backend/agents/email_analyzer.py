@@ -24,13 +24,14 @@ def analyze_email_content(body: str) -> dict:
 - 30 天之后需要则为 'Low'。
 
 budget 为本次采购需求的预算总金额（数字），即申请方愿意为该采购支付的最高总价。
+is_procurement_request：判断该邮件是否为真实的采购/询价需求。只有确实在请求采购某物品时才为 true；通知、广告、订阅、系统邮件、个人往来等一律为 false。
 
 只输出符合所请求 schema 的有效 JSON 对象。
 注意：item_name 请保留邮件原文中的物品名称（不要翻译，以便匹配数据库），summary 字段使用简体中文。
 """
     try:
         response = get_email_analyzer_llm().invoke([
-            SystemMessage(content=system_prompt + "\nSchema: {\"item_name\": \"str\", \"quantity\": int, \"days_available\": int, \"priority\": \"str\", \"summary\": \"str\", \"budget\": number}\n只返回纯 JSON。"),
+            SystemMessage(content=system_prompt + "\nSchema: {\"item_name\": \"str\", \"quantity\": int, \"days_available\": int, \"priority\": \"str\", \"summary\": \"str\", \"budget\": number, \"is_procurement_request\": bool}\n只返回纯 JSON。"),
             HumanMessage(content=body)
         ])
         content = response.content.strip()

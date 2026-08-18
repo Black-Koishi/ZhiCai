@@ -600,7 +600,9 @@ def get_unanalyzed_emails():
     c.execute('''
         SELECT e.* FROM emails e 
         LEFT JOIN email_analysis ea ON e.id = ea.email_id 
-        WHERE ea.id IS NULL AND COALESCE(e.analysis_status, '') != 'ignored'
+        WHERE ea.id IS NULL
+          AND (e.analysis_status IS NULL OR e.analysis_status IN ('', 'failed'))
+          AND LOWER(e.folder) = 'inbox'
         ORDER BY CAST(e.id AS INTEGER) DESC
     ''')
     rows = c.fetchall()

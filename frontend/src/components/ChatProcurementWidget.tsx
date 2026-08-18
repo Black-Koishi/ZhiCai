@@ -9,6 +9,7 @@ interface ChatProcurementWidgetProps {
         mode: 'manual' | 'email';
         item_name?: string;
         email_id?: string;
+        quantity?: number;
     }
 }
 
@@ -31,7 +32,6 @@ export function ChatProcurementWidget({ params }: ChatProcurementWidgetProps) {
     const [isSending, setIsSending] = useState(false);
 
     const [cancelReason, setCancelReason] = useState("");
-    const [isCancelled, setIsCancelled] = useState(false);
     const [isCancelling, setIsCancelling] = useState(false);
 
     useEffect(() => {
@@ -44,12 +44,14 @@ export function ChatProcurementWidget({ params }: ChatProcurementWidgetProps) {
                     if (!res.ok) throw new Error("未找到物品。请核对准确名称。");
                     const json = await res.json();
 
+                    const qty = params.quantity && params.quantity > 0 ? params.quantity : 1;
+                    setQuantity(qty);
                     setData({
                         item_name: json.item.name,
                         item_id: json.item.id,
                         vendor_name: json.vendor?.name || '未知',
                         item_unit_price: json.item.unit_price,
-                        total_cost: json.item.unit_price * quantity
+                        total_cost: json.item.unit_price * qty
                     });
                 } else if (params.mode === 'email' && params.email_id) {
                     const res = await fetch(`${API_BASE_URL}/emails/${params.email_id}/analysis`);
@@ -103,44 +105,31 @@ export function ChatProcurementWidget({ params }: ChatProcurementWidgetProps) {
     }, [quantity, params.mode]);
 
     const handleRunCompliance = async () => {
-        if (params.mode === 'email' && params.email_id) {
-            setIsCheckingCompliance(true);
-            try {
+        setIsCheckingCompliance(true);
+        try {
+            if (params.mode === 'email' && params.email_id) {
                 const res = await fetch(`${API_BASE_URL}/procurement/${params.email_id}/compliance`, { method: "POST" });
                 const json = await res.json();
                 setComplianceStatus(json.passed ? "Passed" : "Failed");
                 setComplianceExplanation(json.explanation || "");
                 setReview(json.review || null);
                 window.dispatchEvent(new Event("email-refresh"));
-            } catch (err: any) {
-                alert(`失败：${err.message}`);
-            } finally {
-                setIsCheckingCompliance(false);
+            } else if (params.mode === 'manual' && data) {
+                const res = await fetch(`${API_BASE_URL}/procurement/manual/compliance`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ item_name: data.item_name, quantity }),
+                });
+                const json = await res.json();
+                if (!res.ok) throw new Error(json.detail || "合规检查失败");
+                setComplianceStatus(json.passed ? "Passed" : "Failed");
+                setComplianceExplanation(json.explanation || "");
+                setReview(json.review || null);
             }
-        }
-    };
-
-    const handleCancelRequest = async () => {
-        if (!params.email_id) return;
-        if (!cancelReason.trim()) {
-            alert("请填写未通过原因");
-            return;
-        }
-        setIsCancelling(true);
-        try {
-            const res = await fetch(`${API_BASE_URL}/procurement/${params.email_id}/cancel`, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ reason: cancelReason.trim() }),
-            });
-            const json = await res.json();
-            if (!res.ok) throw new Error(json.detail || "取消失败");
-            setIsCancelled(true);
-            window.dispatchEvent(new Event("email-refresh"));
         } catch (err: any) {
-            alert(`取消失败：${err.message}`);
+            alert(`失败：${err.message}`);
         } finally {
-            setIsCancelling(false);
+            setIsCheckingCompliance(false);
         }
     };
 
@@ -166,7 +155,7 @@ export function ChatProcurementWidget({ params }: ChatProcurementWidgetProps) {
                 setOrderId(json.order_id);
                 setPdfPath(json.pdf_path);
                 setComplianceStatus("Passed");
-                setComplianceExplanation("已通过手动订单限额自动批准。");
+                setComplianceExplanation(json.explanation || "合规检查通过。");
             } else if (params.mode === 'email' && params.email_id) {
                 const res = await fetch(`${API_BASE_URL}/procurement/${params.email_id}/order`, { method: "POST" });
                 const json = await res.json();
@@ -198,6 +187,31 @@ export function ChatProcurementWidget({ params }: ChatProcurementWidgetProps) {
             alert(`发送失败：${err.message}`);
         } finally {
             setIsSending(false);
+        }
+    };
+
+    const handleCancelRequest = async () => {
+        if (!params.email_id) return;
+        if (!cancelReason.trim()) {
+            alert("请填写未通过原因");
+            return;
+        }
+        setIsCancelling(true);
+        try {
+            const res = await fetch(`${API_BASE_URL}/procurement/${params.email_id}/cancel`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ reason: cancelReason.trim() }),
+            });
+            const json = await res.json();
+            if (!res.ok) throw new Error(json.detail || "操作失败");
+            setComplianceStatus("Failed");
+            setComplianceExplanation(cancelReason.trim());
+            window.dispatchEvent(new Event("email-refresh"));
+        } catch (err: any) {
+            alert(`操作失败：${err.message}`);
+        } finally {
+            setIsCancelling(false);
         }
     };
 
@@ -361,7 +375,7 @@ export function ChatProcurementWidget({ params }: ChatProcurementWidgetProps) {
                     ) : (
                         <>
                             <div className="flex gap-2">
-                                {!isCancelled && params.mode === 'email' && complianceStatus !== 'Passed' && complianceStatus !== 'Failed' && (
+                                {complianceStatus !== 'Passed' && complianceStatus !== 'Failed' && (
                                     <Button
                                         className="flex-1 bg-blue-600 hover:bg-blue-500 text-white"
                                         onClick={handleRunCompliance}
@@ -370,7 +384,7 @@ export function ChatProcurementWidget({ params }: ChatProcurementWidgetProps) {
                                         {isCheckingCompliance ? <Loader2 className="w-4 h-4 animate-spin" /> : "运行合规检查"}
                                     </Button>
                                 )}
-                                {!isCancelled && (!params.mode || params.mode === 'manual' || complianceStatus === 'Passed') && complianceStatus !== 'Failed' && (
+                                {(!params.mode || params.mode === 'manual' || complianceStatus === 'Passed') && complianceStatus !== 'Failed' && (
                                     <Button
                                         className="flex-1 bg-green-600 hover:bg-green-500 text-white"
                                         onClick={handleGenerateOrder}
@@ -380,7 +394,13 @@ export function ChatProcurementWidget({ params }: ChatProcurementWidgetProps) {
                                     </Button>
                                 )}
                             </div>
-                            {(complianceStatus === 'Passed' || complianceStatus === 'Failed') && !isCancelled && (
+                            {complianceStatus === 'Failed' && (
+                                <div className="p-3 rounded-xl border bg-red-500/10 border-red-500/20 text-red-600 dark:text-red-400 text-xs flex items-center gap-2 mt-2">
+                                    <XCircle className="w-4 h-4 shrink-0" /> 合规未通过{params.mode === 'email' ? '，已自动通知发件人' : ''}
+                                </div>
+                            )}
+                            {/* 人工最终兜底：待审核（合规通过、尚未下单）的邮件可提交订单或标记未通过 */}
+                            {params.mode === 'email' && complianceStatus === 'Passed' && !orderId && (
                                 <div className="space-y-2 mt-2">
                                     <p className="text-xs font-medium text-muted-foreground">人工审核 · 标记未通过</p>
                                     <textarea
@@ -397,11 +417,6 @@ export function ChatProcurementWidget({ params }: ChatProcurementWidgetProps) {
                                         {isCancelling ? <Loader2 className="w-4 h-4 animate-spin" /> : <XCircle className="w-4 h-4" />}
                                         标记未通过并通知
                                     </Button>
-                                </div>
-                            )}
-                            {isCancelled && (
-                                <div className="p-3 rounded-xl border bg-gray-500/10 border-gray-500/20 text-gray-500 text-xs flex items-center gap-2 mt-2">
-                                    <XCircle className="w-4 h-4" /> 该采购需求未通过
                                 </div>
                             )}
                         </>

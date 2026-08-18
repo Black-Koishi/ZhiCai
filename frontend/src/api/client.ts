@@ -188,6 +188,13 @@ export async function analyzeAllEmails(): Promise<{ status: string, processed_co
     return response.json();
 }
 
+export const fetchUnanalyzedCount = async (): Promise<number> => {
+    const res = await fetch(`${API_BASE_URL}/emails/unanalyzed-count`);
+    if (!res.ok) throw new Error("获取未分析数量失败");
+    const data = await res.json();
+    return data.count || 0;
+};
+
 export const generateForecast = async (): Promise<any> => {
     const res = await fetch(`${API_BASE_URL}/forecast/generate`, { method: 'POST' });
     if (!res.ok) throw new Error('Failed to generate forecast');

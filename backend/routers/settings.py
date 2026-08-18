@@ -6,7 +6,15 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from dotenv import set_key
 
-from backend.agents.config import get_current_model, update_agent_model, list_ollama_models
+from backend.agents.config import (
+    get_current_model,
+    get_provider,
+    get_cloud_base_url,
+    get_cloud_api_key,
+    update_agent_model,
+    update_cloud_config,
+    list_ollama_models,
+)
 from backend.database import clear_emails
 
 router = APIRouter()
@@ -17,6 +25,7 @@ ENV_PATH = Path(__file__).resolve().parents[2] / ".env"
 class UpdateModelRequest(BaseModel):
     agent_name: str
     model_name: str
+    provider: str = None  # "ollama" | "openai"
 
 
 @router.get("/settings/models")
@@ -25,7 +34,8 @@ async def get_agent_models():
     try:
         agents = ["orchestrator", "email", "compliance", "forecast"]
         models = {agent: get_current_model(agent) for agent in agents}
-        return {"status": "success", "models": models}
+        providers = {agent: get_provider(agent) for agent in agents}
+        return {"status": "success", "models": models, "providers": providers}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -36,6 +46,33 @@ async def get_ollama_models():
     try:
         models = list_ollama_models()
         return {"status": "success", "models": models}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/settings/cloud")
+async def get_cloud_config():
+    """返回云端（OpenAI 兼容）配置（api_key 只返回是否已设置）。"""
+    return {
+        "status": "success",
+        "config": {
+            "base_url": get_cloud_base_url(),
+            "api_key_set": bool(get_cloud_api_key()),
+        },
+    }
+
+
+class CloudConfigUpdate(BaseModel):
+    base_url: str = None
+    api_key: str = None
+
+
+@router.put("/settings/cloud")
+async def update_cloud_config_endpoint(request: CloudConfigUpdate):
+    """保存云端配置到 .env（api_key 留空表示不修改）。"""
+    try:
+        update_cloud_config(request.base_url, request.api_key)
+        return {"status": "success", "message": "云端配置已保存并生效"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -113,7 +150,7 @@ async def update_agent_model_endpoint(request: UpdateModelRequest):
         raise HTTPException(status_code=400, detail=f"无效的 agent_name，必须是 {valid_agents} 之一")
 
     try:
-        update_agent_model(request.agent_name, request.model_name)
+        update_agent_model(request.agent_name, request.model_name, request.provider)
         return {"status": "success", "message": f"已将 {request.agent_name} 的模型更新为 {request.model_name}"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

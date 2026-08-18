@@ -57,6 +57,7 @@ function App() {
 
     // Settings preload state（应用启动时后台预加载，避免打开设置页才加载造成阻塞）
     const [agentModels, setAgentModels] = useState<Record<string, string>>({})
+    const [agentProviders, setAgentProviders] = useState<Record<string, string>>({})
     const [availableModels, setAvailableModels] = useState<string[]>([])
     const [emailConfig, setEmailConfig] = useState<any>(null)
     const [settingsLoaded, setSettingsLoaded] = useState(false)
@@ -68,7 +69,10 @@ function App() {
             fetch(`${API_BASE_URL}/settings/email`).then((r) => r.json()),
         ])
             .then(([modelsData, ollamaData, emailData]) => {
-                if (modelsData.status === "success") setAgentModels(modelsData.models);
+                if (modelsData.status === "success") {
+                    setAgentModels(modelsData.models);
+                    setAgentProviders(modelsData.providers || {});
+                }
                 if (ollamaData.status === "success") setAvailableModels(ollamaData.models || []);
                 if (emailData.status === "success") setEmailConfig(emailData.config);
             })
@@ -179,6 +183,16 @@ function App() {
             if (action.params.view) {
                 handleNavigate(action.params.view as any);
             }
+        } else if (action.action_type === "start_procurement") {
+            // 单封邮件分析完成后的「进入合规检查」：打开内联采购组件（合规 → 下单 → 发邮件）
+            const emailId = action.params?.email_id;
+            if (emailId) {
+                setMessages(prev => [...prev, {
+                    role: "assistant",
+                    content: `我可以帮你处理邮件 ${emailId} 的采购订单。请查看下方详情以继续。`,
+                    ui_actions: [{ action_type: "open_inline_procurement", params: { mode: "email", email_id: emailId } }]
+                }]);
+            }
         }
     }
 
@@ -265,25 +279,8 @@ function App() {
                 </header>
 
                 <div className="flex-1 overflow-hidden relative flex">
-                    {/* Main Content Area */}
-                    <div className={`flex-1 overflow-hidden h-full relative transition-all duration-300 ${activeView === 'home' ? 'bg-transparent' : ''}`}>
-
-                        {/* Home View (Chat Full Screen) */}
-                        {activeView === 'home' && (
-                            <ChatInterface
-                                agentEmailEnabled={agentEmailEnabled}
-                                agentComplianceEnabled={agentComplianceEnabled}
-                                agentPdfEnabled={agentPdfEnabled}
-                                agentForecastEnabled={agentForecastEnabled}
-                                messages={messages}
-                                setMessages={setMessages}
-                                input={input}
-                                setInput={setInput}
-                                isLoading={isLoading}
-                                setIsLoading={setIsLoading}
-                                onUIAction={handleUIAction}
-                            />
-                        )}
+                    {/* Main Content Area（非首页视图） */}
+                    <div className={`overflow-hidden h-full relative transition-all duration-300 min-w-0 ${activeView === 'home' ? 'flex-[0_0_0px]' : 'flex-1'}`}>
 
                         {/* Dashboard View */}
                         {activeView === 'dashboard' && <Dashboard messages={messages} isLoading={isLoading} />}
@@ -328,6 +325,7 @@ function App() {
                             <div className="h-full overflow-auto">
                                 <Settings
                                     agentModels={agentModels}
+                                    agentProviders={agentProviders}
                                     availableModels={availableModels}
                                     emailConfig={emailConfig}
                                     settingsLoaded={settingsLoaded}
@@ -337,29 +335,29 @@ function App() {
                         )}
                     </div>
 
-                    {/* Persistent Side Chat (Visible on emails + dashboard + orders + forecast + settings) */}
-                    {['emails', 'dashboard', 'orders', 'forecast', 'settings'].includes(activeView) && (
-                        <div className="w-[450px] border-l border-white/10 bg-white/20 dark:bg-black/20 backdrop-blur-lg flex flex-col transition-all duration-300">
+                    {/* 编排器（单一实例）：首页全屏，其他视图右侧面板 */}
+                    <div className={`h-full flex flex-col transition-all duration-300 min-w-0 overflow-hidden ${activeView === 'home' ? 'flex-1' : activeView === 'new_order' ? 'flex-[0_0_0px]' : 'flex-[0_1_450px] border-l border-white/10 bg-white/20 dark:bg-black/20 backdrop-blur-lg'}`}>
+                        {activeView !== 'home' && activeView !== 'new_order' && (
                             <div className="p-3 border-b border-white/10 bg-white/10 dark:bg-black/10 backdrop-blur-md">
                                 <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">编排器</span>
                             </div>
-                            <div className="flex-1 overflow-hidden">
-                                <ChatInterface
-                                    agentEmailEnabled={agentEmailEnabled}
-                                    agentComplianceEnabled={agentComplianceEnabled}
-                                    agentPdfEnabled={agentPdfEnabled}
-                                    agentForecastEnabled={agentForecastEnabled}
-                                    messages={messages}
-                                    setMessages={setMessages}
-                                    input={input}
-                                    setInput={setInput}
-                                    isLoading={isLoading}
-                                    setIsLoading={setIsLoading}
-                                    onUIAction={handleUIAction}
-                                />
-                            </div>
+                        )}
+                        <div className="flex-1 overflow-hidden">
+                            <ChatInterface
+                                agentEmailEnabled={agentEmailEnabled}
+                                agentComplianceEnabled={agentComplianceEnabled}
+                                agentPdfEnabled={agentPdfEnabled}
+                                agentForecastEnabled={agentForecastEnabled}
+                                messages={messages}
+                                setMessages={setMessages}
+                                input={input}
+                                setInput={setInput}
+                                isLoading={isLoading}
+                                setIsLoading={setIsLoading}
+                                onUIAction={handleUIAction}
+                            />
                         </div>
-                    )}
+                    </div>
                 </div>
             </main>
 

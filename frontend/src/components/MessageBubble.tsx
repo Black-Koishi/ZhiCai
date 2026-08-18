@@ -93,6 +93,20 @@ export function MessageBubble({ msg, onActionClick }: MessageBubbleProps) {
                             </div>
                         ))}
 
+                        {/* 进入合规检查（采购流程）按钮 */}
+                        {msg.ui_actions.filter((a: any) => a.action_type === 'start_procurement').map((action: any, i: number) => (
+                            <div key={`sp-${i}`} className="mt-3 flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="bg-green-600/10 hover:bg-green-600/20 text-green-500 border-green-500/30 font-medium"
+                                    onClick={() => onActionClick && onActionClick(action)}
+                                >
+                                    {action.params?.label || "进入合规检查"}
+                                </Button>
+                            </div>
+                        ))}
+
                         {/* Inline Procurement Widget */}
                         {msg.ui_actions
                             .filter((a: any) => a.action_type === 'open_inline_procurement')

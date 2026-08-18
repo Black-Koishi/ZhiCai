@@ -3,6 +3,7 @@ import smtplib
 import email
 import json
 import os
+import re
 import urllib.request
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -14,6 +15,40 @@ from backend.attachments import save as save_attachment
 
 # Load environment variables
 load_dotenv()
+
+
+def _decode_mime_header(value):
+    """解码 MIME 编码的邮件头（如 =?gb18030?B?...?=）。"""
+    if not value:
+        return ""
+    try:
+        parts = decode_header(value)
+    except Exception:
+        return str(value)
+    out = []
+    for part, charset in parts:
+        if isinstance(part, bytes):
+            try:
+                out.append(part.decode(charset or "utf-8", errors="replace"))
+            except (LookupError, UnicodeDecodeError):
+                out.append(part.decode("utf-8", errors="replace"))
+        else:
+            out.append(part)
+    return "".join(out)
+
+
+def _decode_body_payload(payload, charset):
+    """按声明字符集解码正文，回退到 utf-8 / gb18030。"""
+    if not payload:
+        return ""
+    for enc in (charset, "utf-8", "gb18030"):
+        if not enc:
+            continue
+        try:
+            return payload.decode(enc)
+        except (UnicodeDecodeError, LookupError):
+            continue
+    return payload.decode("utf-8", errors="replace")
 
 
 class EmailService:
@@ -39,19 +74,39 @@ class EmailService:
             mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port)
             mail.login(self.email_user, self.email_pass)
 
-            imap_folder = folder
-            if folder.lower() == "sent":
-                imap_folder = '"[Gmail]/Sent Mail"'
-            elif folder.lower() == "trash":
-                imap_folder = '"[Gmail]/Trash"'
-            elif folder.lower() == "drafts":
-                imap_folder = '"[Gmail]/Drafts"'
+            # 不同邮箱对「已发送/已删除/草稿」文件夹命名不同，先动态发现，再回退到常见名称
+            def _find_folder(keywords):
+                try:
+                    status, folders = mail.list()
+                    if status == "OK":
+                        for line in folders:
+                            text = line.decode("utf-8", errors="ignore") if isinstance(line, bytes) else str(line)
+                            names = re.findall(r'"([^"]*)"', text)
+                            if names:
+                                name = names[-1]
+                                if any(k in name.lower() for k in keywords):
+                                    # 含空格等特殊字符的文件夹名需加双引号
+                                    return f'"{name}"'
+                except Exception:
+                    pass
+                return None
+
+            key = folder.lower()
+            if key == "sent":
+                imap_folder = _find_folder(["sent"]) or '"[Gmail]/Sent Mail"'
+            elif key == "trash":
+                imap_folder = _find_folder(["trash", "deleted"]) or '"[Gmail]/Trash"'
+            elif key == "drafts":
+                imap_folder = _find_folder(["draft"]) or '"[Gmail]/Drafts"'
+            else:
+                # inbox 等标准文件夹：INBOX 大小写不敏感，直接按原名选择
+                imap_folder = folder
 
             status, _ = mail.select(imap_folder)
             if status != "OK":
                 return []
 
-            status, data = mail.search(None, "ALL")
+            status, data = mail.uid("SEARCH", None, "ALL")
             mail_ids = data[0].split()
             latest_email_ids = mail_ids[-limit:]
             latest_email_ids.reverse()
@@ -59,14 +114,12 @@ class EmailService:
             email_list = []
             for i in latest_email_ids:
                 try:
-                    status, msg_data = mail.fetch(i, "(RFC822)")
+                    status, msg_data = mail.uid("FETCH", i, "(RFC822)")
                     for response_part in msg_data:
                         if isinstance(response_part, tuple):
                             msg = email.message_from_bytes(response_part[1])
-                            subject, encoding = decode_header(msg["Subject"])[0]
-                            if isinstance(subject, bytes):
-                                subject = subject.decode(encoding if encoding else "utf-8")
-                            sender = msg.get("From")
+                            subject = _decode_mime_header(msg["Subject"])
+                            sender = _decode_mime_header(msg.get("From"))
                             date = msg.get("Date")
 
                             body = ""
@@ -77,14 +130,15 @@ class EmailService:
                                     try:
                                         payload = part.get_payload(decode=True)
                                         if payload and content_type == "text/plain" and "attachment" not in content_disposition:
-                                            body += payload.decode(errors="ignore")
+                                            charset = part.get_content_charset()
+                                            body += _decode_body_payload(payload, charset)
                                     except Exception:
                                         pass
                             else:
                                 try:
                                     payload = msg.get_payload(decode=True)
-                                    if payload:
-                                        body = payload.decode(errors="ignore")
+                                    charset = msg.get_content_charset()
+                                    body = _decode_body_payload(payload, charset)
                                 except Exception:
                                     pass
 
@@ -218,8 +272,13 @@ class EmailService:
             return self._mailpit_send(to_email, msg)
 
         try:
-            server = smtplib.SMTP(self.smtp_server, self.smtp_port)
-            server.starttls()
+            if self.smtp_port == 465:
+                # 465：隐式 SSL（QQ、网易等）
+                server = smtplib.SMTP_SSL(self.smtp_server, self.smtp_port)
+            else:
+                # 587：STARTTLS（Gmail、Outlook 等）
+                server = smtplib.SMTP(self.smtp_server, self.smtp_port)
+                server.starttls()
             server.login(self.email_user, self.email_pass)
             server.sendmail(self.email_user, to_email, msg.as_string())
             server.quit()

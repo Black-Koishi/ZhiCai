@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Bot, Mail, ShieldCheck, ShoppingCart, Sparkles, Star } from "lucide-react";
+import { Send, Bot, Mail, ShieldCheck, ShoppingCart, Sparkles, Star, TrendingUp, Settings } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -102,11 +102,13 @@ export function ChatInterface({
         submitMessage(input);
     };
 
-    const suggestions = [
+    const suggestions: { icon: any; text: string; desc: string; command?: string }[] = [
         { icon: Mail, text: "分析邮件", desc: "解析收件箱中的采购需求" },
         { icon: ShieldCheck, text: "运行合规检查", desc: "审核已分析的采购请求" },
         { icon: Star, text: "显示高优先级邮件", desc: "跳转邮件并筛选高优先级" },
-        { icon: ShoppingCart, text: "查看订单", desc: "跳转采购订单列表" },
+        { icon: ShoppingCart, text: "下单", desc: "示例：订购 10 个无绳电钻", command: "订购 10 个无绳电钻" },
+        { icon: TrendingUp, text: "生成预测报告", desc: "后台生成需求预测" },
+        { icon: Settings, text: "打开设置", desc: "配置智能体与邮箱" },
     ];
 
     return (
@@ -135,7 +137,7 @@ export function ChatInterface({
                                 {suggestions.map((s) => (
                                     <button
                                         key={s.text}
-                                        onClick={() => submitMessage(s.text)}
+                                        onClick={() => submitMessage(s.command || s.text)}
                                         className="group flex flex-col items-start gap-1.5 p-4 rounded-xl text-left bg-white/40 dark:bg-black/30 backdrop-blur-sm border border-white/20 dark:border-white/10 hover:border-blue-500/40 hover:bg-white/60 dark:hover:bg-black/50 transition-all duration-200 hover:-translate-y-0.5"
                                     >
                                         <s.icon className="h-5 w-5 text-blue-500 group-hover:text-cyan-500 transition-colors" />

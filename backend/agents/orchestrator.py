@@ -20,7 +20,7 @@ def orchestrator_router(input_str: str) -> OrchestrationResponse:
       "decision": "email" | "compliance" | "pdf" | "supplier" | "forecast" | "unknown",
       "reasoning": "<简短字符串>",
       "ui_actions": [
-        {{ "action_type": "redirect" | "set_filter" | "popup" | "trigger_api" | "open_inline_procurement", "params": {{ "view": "...", "search": "...", "status": "unanalyzed"|"high"|"medium"|"low"|"failed"|"processed"|"failed_compliance"|"ignored"|"pending_review", "sort": "newest"|"oldest", "endpoint": "...", "method": "POST", "label": "...", "item_name": "...", "mode": "manual" }} }}
+        {{ "action_type": "redirect" | "set_filter" | "popup" | "trigger_api" | "open_inline_procurement", "params": {{ "view": "...", "search": "...", "status": "unanalyzed"|"high"|"medium"|"low"|"failed"|"processed"|"failed_compliance"|"ignored"|"pending_review", "sort": "newest"|"oldest", "endpoint": "...", "method": "POST", "label": "...", "item_name": "...", "quantity": 数字, "mode": "manual" }} }}
       ],
       "chat_response": "字符串或 null"
     }}
@@ -43,9 +43,11 @@ def orchestrator_router(input_str: str) -> OrchestrationResponse:
         - 如果缺少 ID，通过 chat_response 向用户询问。
     - 'decision'：对于按物品名称的订单或合规请求（如“订购挡泥板”、“锂电池合规检查”）或手动订单：
         - 设为 'unknown'。
-        - ui_actions 设为：[{{ "action_type": "open_inline_procurement", "params": {{ "item_name": "<提取的物品名称>", "mode": "manual" }} }}]
+        - ui_actions 设为：[{{ "action_type": "open_inline_procurement", "params": {{ "item_name": "<提取的物品名称>", "quantity": <提取的数量，未提及则默认 1>, "mode": "manual" }} }}]
         - 'chat_response' 应为：“我可以帮你处理这个订单，请查看下方详情。”
     - 'decision'：对于导航/查看（显示、列出、打开、前往收件箱、展示），用 'unknown' + ui_actions redirect。
+    - 'decision'：对于打开/前往设置、配置页面，用 'unknown' + redirect 到 settings（view = "settings"）。
+    - 'decision'：对于下单/新建订单/手动下单（没有具体物品名），用 'unknown' + redirect 到 new_order（view = "new_order"）。
     - 'decision'：对于按状态筛选邮件（如“显示高优先级邮件”“展示未分析邮件”“只看待审核的”），用 'unknown' + redirect 到 emails + set_filter 设置 status：
         - 高 / 高优先级 → "high"，中 / 中优先级 → "medium"，低 / 低优先级 → "low"
         - 未分析 → "unanalyzed"，分析失败 → "failed"，待审核 → "pending_review"
@@ -57,11 +59,13 @@ def orchestrator_router(input_str: str) -> OrchestrationResponse:
     - 用户："分析邮件"：{{"decision": "email", "reasoning": "用户想分析邮件", "chat_response": "正在启动提取流水线...", "ui_actions": []}}
     - 用户："检查 14 的合规"：{{"decision": "unknown", "reasoning": "按 ID 合规检查", "chat_response": "正在为邮件 14 触发合规检查。", "ui_actions": [{{"action_type": "trigger_api", "params": {{"endpoint": "/procurement/14/compliance", "method": "POST", "label": "运行合规检查（14）"}}}}]}}
     - 用户："为订单 14 生成 pdf"：{{"decision": "unknown", "reasoning": "按订单 ID 生成 PDF", "chat_response": "点击下方为订单 14 生成 PDF。", "ui_actions": [{{"action_type": "trigger_api", "params": {{"endpoint": "/orders/14/generate-pdf", "method": "POST", "label": "生成 PDF（订单 14）"}}}}]}}
-    - 用户："订购挡泥板"：{{"decision": "unknown", "reasoning": "按物品名称手动下单", "chat_response": "我可以帮你处理这个订单，请查看下方详情。", "ui_actions": [{{"action_type": "open_inline_procurement", "params": {{"item_name": "挡泥板", "mode": "manual"}}}}]}}
-    - 用户："订购锂电池"：{{"decision": "unknown", "reasoning": "按物品名称手动下单", "chat_response": "我可以帮你处理这个订单，请查看下方详情。", "ui_actions": [{{"action_type": "open_inline_procurement", "params": {{"item_name": "锂电池", "mode": "manual"}}}}]}}
+    - 用户："订购挡泥板"：{{"decision": "unknown", "reasoning": "按物品名称手动下单", "chat_response": "我可以帮你处理这个订单，请查看下方详情。", "ui_actions": [{{"action_type": "open_inline_procurement", "params": {{"item_name": "挡泥板", "quantity": 1, "mode": "manual"}}}}]}}
+    - 用户："订购 10 个锂电池"：{{"decision": "unknown", "reasoning": "按物品名称手动下单", "chat_response": "我可以帮你处理这个订单，请查看下方详情。", "ui_actions": [{{"action_type": "open_inline_procurement", "params": {{"item_name": "锂电池", "quantity": 10, "mode": "manual"}}}}]}}
     - 用户："显示高优先级邮件"：{{"decision": "unknown", "reasoning": "导航/筛选请求", "chat_response": null, "ui_actions": [{{"action_type": "redirect", "params": {{"view": "emails"}}}}, {{"action_type": "set_filter", "params": {{"status": "high"}}}}]}}
     - 用户："展示未分析邮件"：{{"decision": "unknown", "reasoning": "导航/筛选请求", "chat_response": null, "ui_actions": [{{"action_type": "redirect", "params": {{"view": "emails"}}}}, {{"action_type": "set_filter", "params": {{"status": "unanalyzed"}}}}]}}
     - 用户："生成预测报告"：{{"decision": "forecast", "reasoning": "用户想生成需求预测", "chat_response": "正在后台生成预测报告...", "ui_actions": []}}
+    - 用户："打开设置"：{{"decision": "unknown", "reasoning": "导航到设置", "chat_response": null, "ui_actions": [{{"action_type": "redirect", "params": {{"view": "settings"}}}}]}}
+    - 用户："下单"：{{"decision": "unknown", "reasoning": "新建订单", "chat_response": null, "ui_actions": [{{"action_type": "redirect", "params": {{"view": "new_order"}}}}]}}
     - 用户："新增供应商：顶点工业供应，主营金属材料，邮箱 sales@vertex.com，有 ISO 认证"：{{"decision": "supplier", "reasoning": "供应商入驻", "chat_response": null, "ui_actions": []}}
 
     用户输入："{input_str}"

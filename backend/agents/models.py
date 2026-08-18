@@ -36,6 +36,7 @@ class EmailExtraction(BaseModel):
     priority: str = Field(description="Priority: 'High' (within 7 days), 'Medium' (7-30 days), or 'Low' (after 30 days)")
     summary: str = Field(description="A brief 1-sentence summary of the request.")
     budget: Optional[float] = Field(default=None, description="The total budget for this procurement request.")
+    is_procurement_request: bool = Field(default=True, description="True if the email is a genuine procurement/purchase request; false for newsletters, notifications, ads, personal mail, etc.")
 
 
 class SupplierExtraction(BaseModel):

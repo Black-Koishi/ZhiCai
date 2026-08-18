@@ -17,7 +17,7 @@ export function ManagementPage() {
     ];
 
     return (
-        <div className="h-full w-full flex flex-col">
+        <div className="h-full w-full flex flex-col animate-in fade-in slide-in-from-bottom-2 duration-300">
             {/* Tab 栏 */}
             <div className="h-14 border-b border-white/10 px-6 flex items-center gap-2 bg-white/20 dark:bg-black/20 shrink-0">
                 {tabs.map((t) => (
@@ -39,9 +39,11 @@ export function ManagementPage() {
 
             {/* 内容 */}
             <div className="flex-1 overflow-hidden">
-                {tab === "suppliers" && <SuppliersTab />}
-                {tab === "items" && <ItemsTab />}
-                {tab === "orders" && <OrdersPage />}
+                <div key={tab} className="h-full animate-in fade-in slide-in-from-right-2 duration-200">
+                    {tab === "suppliers" && <SuppliersTab />}
+                    {tab === "items" && <ItemsTab />}
+                    {tab === "orders" && <OrdersPage />}
+                </div>
             </div>
         </div>
     );

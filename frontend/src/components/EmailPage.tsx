@@ -37,7 +37,7 @@ import {
     DropdownMenuRadioGroup,
     DropdownMenuRadioItem,
 } from "@/components/ui/dropdown-menu";
-import { fetchEmails, syncEmails, EmailItem, analyzeEmail, analyzeAllEmails, getEmailAnalysis, ignoreEmail, API_BASE_URL } from "@/api/client";
+import { fetchEmails, syncEmails, EmailItem, analyzeEmail, analyzeAllEmails, fetchUnanalyzedCount, getEmailAnalysis, ignoreEmail, API_BASE_URL } from "@/api/client";
 import { Message } from "@/components/ChatInterface";
 
 function formatEmailDate(dateStr: string): string {
@@ -274,7 +274,8 @@ export function EmailPage({
                 const newMsg: Message = {
                     role: "assistant",
                     content: `✅ 邮件 ${emailId} 分析完成。`,
-                    steps: ["邮件智能体：正在分析收件箱...", res.step, "邮件智能体：已处理 1 封邮件。"]
+                    steps: ["邮件智能体：正在分析收件箱...", res.step, "邮件智能体：已处理 1 封邮件。"],
+                    ui_actions: [{ action_type: "start_procurement", params: { email_id: emailId, label: "进入合规检查" } }]
                 };
                 setMessages(prev => [...prev, newMsg]);
             }
@@ -322,9 +323,13 @@ export function EmailPage({
 
     const handleAnalyzeAll = async () => {
         setIsAnalyzingAll(true);
-        // 立即在 Agent 中提示「开始批量分析」
+        // 先获取待分析邮件数量，再开始分析，避免用户觉得像卡住
+        let unanalyzedCount = 0;
+        try {
+            unanalyzedCount = await fetchUnanalyzedCount();
+        } catch { /* 数量获取失败时按 0 处理 */ }
         if (setMessages) {
-            setMessages(prev => [...prev, { role: "assistant", content: `🔍 邮件智能体：正在批量分析所有未分析邮件...` }]);
+            setMessages(prev => [...prev, { role: "assistant", content: `🔍 邮件智能体：检测到 ${unanalyzedCount} 封未分析邮件，开始批量分析...` }]);
         }
         try {
             const res = await analyzeAllEmails();
@@ -390,7 +395,7 @@ export function EmailPage({
     // ----------------------------------------------------------------------
     if (selectedEmail) {
         return (
-            <div className="h-full flex flex-col bg-white/30 dark:bg-black/20 backdrop-blur-md">
+            <div className="h-full flex flex-col bg-white/30 dark:bg-black/20 backdrop-blur-md animate-in fade-in duration-300">
                 {/* Detail View Toolbar */}
                 <div className="h-16 border-b border-white/20 px-6 flex items-center justify-between bg-white/40 dark:bg-black/40">
                     <div className="flex items-center gap-4">
@@ -611,7 +616,7 @@ export function EmailPage({
     // View: Email List
     // ----------------------------------------------------------------------
     return (
-        <div className="h-full flex flex-col bg-white/30 dark:bg-black/20 backdrop-blur-md">
+        <div className="h-full flex flex-col bg-white/30 dark:bg-black/20 backdrop-blur-md animate-in fade-in duration-300">
             {/* List View Toolbar */}
             <div className="h-16 border-b border-white/20 px-6 flex items-center justify-between bg-white/40 dark:bg-black/40">
                 <div className="flex items-center gap-4 flex-1">
@@ -703,7 +708,7 @@ export function EmailPage({
             </div>
 
             {/* Email List */}
-            <ScrollArea className="flex-1">
+            <div className="flex-1 overflow-y-auto overflow-x-hidden custom-scrollbar">
                 <div className="divide-y divide-white/10 dark:divide-white/5">
                     {filteredEmails.map((email) => (
                         <div
@@ -717,17 +722,17 @@ export function EmailPage({
                                 </span>
                             </div>
 
-                            <div className="flex-1 min-w-0">
+                            <div className="flex-1 min-w-0 overflow-hidden">
                                 <div className="flex items-center gap-2 mb-0.5 min-w-0">
                                     <h4 className="text-sm font-semibold text-foreground truncate min-w-0">
                                         {email.sender}
                                     </h4>
                                     {folder === "inbox" && <EmailTag status={email.analysis_status} priority={email.priority} error={email.analysis_error} />}
                                 </div>
-                                <h5 className="text-sm font-medium text-foreground/90 truncate">
+                                <h5 className="text-sm font-medium text-foreground/90 truncate min-w-0">
                                     {email.subject}
                                 </h5>
-                                <p className="text-xs text-muted-foreground truncate opacity-80 group-hover:opacity-100 transition-opacity">
+                                <p className="text-xs text-muted-foreground truncate min-w-0 opacity-80 group-hover:opacity-100 transition-opacity">
                                     {email.body}
                                 </p>
                             </div>
@@ -811,7 +816,7 @@ export function EmailPage({
                         </div>
                     )}
                 </div>
-            </ScrollArea>
+            </div>
 
             {/* 忽略邮件弹窗 */}
             <Dialog open={!!ignoreTarget} onOpenChange={(o) => !o && setIgnoreTarget(null)}>

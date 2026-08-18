@@ -17,7 +17,7 @@ def main():
     parser.add_argument("--sender", default="sales@vertexindustrial.com", help="发件人")
     parser.add_argument("--to", default="procurement@aurora.com", help="收件人")
     parser.add_argument("--subject", default="采购需求 - 冷轧钢板", help="主题")
-    parser.add_argument("--body", default="您好，请订购 10个人体工学办公椅，预算1000000元, 需求 100 天内到货。", help="正文")
+    parser.add_argument("--body", default="您好，请订购 1000个手办，预算1000000元, 需求 100 天内到货。", help="正文")
     args = parser.parse_args()
 
     msg = MIMEText(args.body, "plain", "utf-8")

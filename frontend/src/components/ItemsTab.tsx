@@ -119,7 +119,7 @@ export function ItemsTab() {
                         </div>
                     ) : (
                         <div className="rounded-xl border border-white/10 overflow-hidden bg-white/40 dark:bg-black/30 backdrop-blur-sm">
-                            <Table>
+                            <Table className="min-w-[1000px]">
                                 <TableHeader className="sticky top-0 z-10 bg-white/80 dark:bg-black/80 backdrop-blur-md">
                                     <TableRow className="hover:bg-transparent border-b border-white/10">
                                         <TableHead className="text-muted-foreground">ID</TableHead>
@@ -143,7 +143,7 @@ export function ItemsTab() {
                                             <TableCell className="text-muted-foreground">{item.unit || "—"}</TableCell>
                                             <TableCell className="font-mono">${(item.unit_price ?? 0).toLocaleString()}</TableCell>
                                             <TableCell className="text-muted-foreground">{item.vendor_name || "—"}</TableCell>
-                                            <TableCell>
+                                            <TableCell className="whitespace-nowrap">
                                                 {item.qty_on_hand == null ? (
                                                     <span className="text-muted-foreground">—</span>
                                                 ) : (

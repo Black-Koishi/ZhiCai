@@ -4,9 +4,9 @@ import sqlite3
 import threading
 from pathlib import Path
 import os
-import ollama
+from langchain_core.messages import SystemMessage, HumanMessage
 
-from backend.agents.config import get_current_model, OLLAMA_BASE_URL
+from backend.agents.config import get_current_model, get_llm
 
 # DB Path matching database.py
 DB_DIR = Path(__file__).resolve().parent / "data"
@@ -116,8 +116,6 @@ def generate_forecast_report():
     model_name = get_current_model("forecast")
     
     try:
-        client = ollama.Client(host=OLLAMA_BASE_URL)
-        
         system_prompt = (
             "你是一个高度分析性的结构化智能体。你的任务是将原始 Prophet 数据处理成结构化的 JSON 载荷。\n"
             "严格返回符合以下精确 schema 的 JSON 对象：\n"
@@ -135,17 +133,13 @@ def generate_forecast_report():
         
         user_prompt = f"请将以下统计数据映射到严格的 JSON schema 中（文本值使用简体中文）：\n\n{stats_json}"
         
-        response = client.chat(
-            model=model_name,
-            messages=[
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt}
-            ],
-            options={"temperature": 0.1},
-            format="json"
-        )
+        llm = get_llm("forecast", format="json", temperature=0.1)
+        response = llm.invoke([
+            SystemMessage(content=system_prompt),
+            HumanMessage(content=user_prompt)
+        ])
         
-        markdown_content = response['message']['content'].strip()
+        markdown_content = response.content.strip()
         
         # Clean up any potential markdown code block wrappers
         if markdown_content.startswith("```json"):

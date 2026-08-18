@@ -18,6 +18,9 @@ def analyze_email(email_id: str, body: str) -> dict:
     if not extraction:
         raise ValueError("无法从邮件中提取结构化数据。")
 
+    if not extraction.get("is_procurement_request", True):
+        raise ValueError("该邮件不是采购需求邮件，已标记为分析失败。")
+
     item_name = extraction.get("item_name", "")
     item_data = get_item_by_name(item_name)
     if not item_data:
