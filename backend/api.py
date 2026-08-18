@@ -1,4 +1,4 @@
-"""FastAPI 应用装配层：中间件、静态文件与路由注册。
+"""FastAPI 应用装配层：中间件、静态文件(用于下载生成的 PDF)与路由注册。
 
 业务路由按域拆分在 backend/routers/ 下。
 """
@@ -20,6 +20,7 @@ _ALLOWED_ORIGINS = [
     for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174").split(",")
     if o.strip()
 ]
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=_ALLOWED_ORIGINS,
@@ -34,7 +35,7 @@ ORDERS_DIR = PROJECT_ROOT / "orders"
 ORDERS_DIR.mkdir(exist_ok=True)
 app.mount("/static/orders", StaticFiles(directory=str(ORDERS_DIR)), name="orders")
 
-
+# 启动时初始化数据库
 @app.on_event("startup")
 def on_startup():
     init_db()

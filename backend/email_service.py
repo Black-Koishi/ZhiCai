@@ -159,6 +159,7 @@ class EmailService:
 
             mail.close()
             mail.logout()
+            # 保存邮件到数据库
             save_emails(email_list)
             return email_list
         except Exception as e:

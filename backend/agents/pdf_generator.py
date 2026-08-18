@@ -76,8 +76,8 @@ def _load_cjk_font(pdf) -> str:
 
 def generate_order_pdf(order: dict, output_dir: str = "orders") -> str:
     """
-    Generates a PDF Purchase Order using fpdf2.
-    Returns the path to the saved PDF file.
+    使用 fpdf2 生成一个 PDF 购货订单。
+    返回保存的 PDF 文件的路径。
     """
     from fpdf import FPDF, Align
 

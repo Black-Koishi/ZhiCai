@@ -11,8 +11,8 @@ from backend.agents.models import OrchestrationResponse
 
 def orchestrator_router(input_str: str) -> OrchestrationResponse:
     """
-    Orchestrator: Analyzes input to decide routing and UI actions.
-    Simplified for Mistral reliability using native JSON mode.
+    协调器：对用户输入信息进行分析，以决定路由方式和界面操作。
+    通过使用原生 JSON Scheam 简化了对 结构化输出 的可靠性保障。
     """
     prompt = f"""你是一个 AI 编排器。
     只输出符合以下 schema 的有效 JSON：
@@ -20,7 +20,7 @@ def orchestrator_router(input_str: str) -> OrchestrationResponse:
       "decision": "email" | "compliance" | "pdf" | "supplier" | "forecast" | "unknown",
       "reasoning": "<简短字符串>",
       "ui_actions": [
-        {{ "action_type": "redirect" | "set_filter" | "popup" | "trigger_api" | "open_inline_procurement", "params": {{ "view": "...", "search": "...", "status": "unanalyzed"|"high"|"medium"|"low"|"failed"|"processed"|"failed_compliance"|"ignored"|"pending_review", "sort": "newest"|"oldest", "endpoint": "...", "method": "POST", "label": "...", "item_name": "...", "quantity": 数字, "mode": "manual" }} }}
+        {{ "action_type": "redirect" | "set_filter" | "popup" | "trigger_api" | "open_inline_procurement" | "params": {{ "view": "...", "search": "...", "status": "unanalyzed"|"high"|"medium"|"low"|"failed"|"processed"|"failed_compliance"|"ignored"|"pending_review", "sort": "newest"|"oldest", "endpoint": "...", "method": "POST", "label": "...", "item_name": "...", "quantity": 数字, "mode": "manual" }} }}
       ],
       "chat_response": "字符串或 null"
     }}
@@ -80,13 +80,13 @@ def orchestrator_router(input_str: str) -> OrchestrationResponse:
         response = get_router_llm().invoke(messages)
         data = json.loads(response.content)
 
-        # Robust mapping back to our preferred schema if LLM hallucinated keys
+        # 如果 LLM 生成了错误但意思相近的键, 则映射回schema
         if "decision" not in data:
             if "action" in data: data["decision"] = data["action"]
             elif "intent" in data: data["decision"] = data["intent"]
             else: data["decision"] = "unknown"
 
-        # Mapping ui_actions
+        # 如果 LLM 生成了错误但意思相近的键, 则映射回ui_actions
         if "ui_actions" not in data:
             data["ui_actions"] = []
             for key in ["actions", "ui_hints", "hints"]:
@@ -96,7 +96,7 @@ def orchestrator_router(input_str: str) -> OrchestrationResponse:
 
         valid_decisions = ["email", "compliance", "pdf", "supplier", "forecast", "unknown"]
         if data.get("decision") not in valid_decisions:
-            # Simple fallback heuristic
+            # 简单的关键词检测兜底
             if "forecast" in str(data.get("decision", "")).lower() or "预测" in str(data.get("decision", "")):
                 data["decision"] = "forecast"
             elif "pdf" in str(data.get("decision", "")).lower():

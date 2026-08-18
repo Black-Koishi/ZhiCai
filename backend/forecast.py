@@ -8,30 +8,31 @@ from langchain_core.messages import SystemMessage, HumanMessage
 
 from backend.agents.config import get_current_model, get_llm
 
-# DB Path matching database.py
+# 数据库文件位于 backend/data/procurement.db
 DB_DIR = Path(__file__).resolve().parent / "data"
 DB_NAME = str(DB_DIR / "procurement.db")
 
 def analyze_seasonality():
-    """ Runs mathematical Prophet analysis directly on SQLite orders table. """
+    """ 直接在 SQLite 订单表上运行数学 Prophet 分析。 """
     try:
         conn = sqlite3.connect(DB_NAME)
         
-        # Pull required orders + item details joined
+        # 获取订单和物品详情
         query = '''
             SELECT o.created_at, o.qty, i.name 
             FROM orders o
             JOIN items i ON o.item_id = i.id
         '''
         df = pd.read_sql_query(query, conn)
+        # 关闭数据库连接
         conn.close()
         
         if df.empty:
-             return {"error": "数据库中没有可用于分析的订单。"}
-
+            return {"error": "数据库中没有可用于分析的订单。"}
+        # 将 created_at 列转换为日期时间格式
         df['created_at'] = pd.to_datetime(df['created_at'], format='mixed')
-        
-        # Aggregate quantity by item and month
+
+        # 按物品、月份、月份编号聚合数量
         month_names = {1: '1月', 2: '2月', 3: '3月', 4: '4月', 5: '5月', 6: '6月',
                        7: '7月', 8: '8月', 9: '9月', 10: '10月', 11: '11月', 12: '12月'}
         df['month'] = df['created_at'].dt.month.map(month_names)
@@ -41,7 +42,7 @@ def analyze_seasonality():
         
         findings = {}
         
-        # Analyze top 15 items by total volume
+        # 分析销量最高的15个物品
         top_items = df.groupby('name')['qty'].sum().nlargest(15).index
         
         for item in top_items:
@@ -52,47 +53,63 @@ def analyze_seasonality():
                 peak_month = peak_month_row['month']
                 peak_sales = peak_month_row['qty']
                 
-                # Calculate percentage increase
+                # 计算百分比增长
                 if avg_sales > 0:
                     pct_increase = ((peak_sales - avg_sales) / avg_sales) * 100
-                    if pct_increase > 25: # Strong seasonal trend threshold
+                    if pct_increase > 25: # 强季节性趋势阈值
                         findings[item] = f"需求在 {peak_month} 激增，较月度平均增长 {pct_increase:.0f}%。"
                         
-        # Prophet trend decomposition on aggregate daily store sales
-        chart_data = [] # Data array specifically for Recharts
+        # Prophet 趋势分解在聚合的每日店铺销量上
+        chart_data = [] # 数据数组, 专门用于 Recharts
         top_items_data = monthly_sales[monthly_sales['name'].isin(top_items)]
         
-        # We need a stable pivot for Recharts: rows are months, columns are item quantities
+        # 为 Recharts 准备稳定的透视表结构：行是月份，列是各商品的数量。
         if not top_items_data.empty:
             pivot = top_items_data.pivot_table(index='month_num', columns='name', values='qty', aggfunc='sum').fillna(0)
             
-            # Month mapping (reuse month_names defined above)
+            # 月份映射 (重用上面定义的 month_names)
             for month_num in pivot.index:
                 row_dict = {"name": month_names.get(month_num, str(month_num))}
                 for col in pivot.columns:
                     row_dict[col] = float(pivot.at[month_num, col])
                 chart_data.append(row_dict)
                 
+        # 尝试运行 Prophet 趋势分解
         try:
-            from prophet import Prophet  # lazy import: Prophet 1.1.5 is incompatible with NumPy 2.x
+            import numpy as _np
+            # 兼容 NumPy 2.x：prophet 1.1.5 仍在使用已删除的 np.float_
+            if not hasattr(_np, 'float_'):
+                _np.float_ = _np.float64
+
             daily_sales = df.groupby(df['created_at'].dt.date)['qty'].sum().reset_index()
+            # ds=日期, y=数值
             daily_sales.columns = ['ds', 'y']
-            
+
+            # 至少有14天数据才能进行分析
             if len(daily_sales) >= 14:
-                # Initialize Prophet model
-                m = Prophet(daily_seasonality=False, yearly_seasonality=False)
-                m.fit(daily_sales)
-                
-                forecast = m.predict(daily_sales)
-                
-                trend_start = forecast['trend'].iloc[0]
-                trend_end = forecast['trend'].iloc[-1]
+                trend_start = trend_end = None
+                try:
+                    from prophet import Prophet
+                    m = Prophet(daily_seasonality=False, yearly_seasonality=False)
+                    m.fit(daily_sales)
+                    forecast = m.predict(daily_sales)
+                    trend_start = float(forecast['trend'].iloc[0])
+                    trend_end = float(forecast['trend'].iloc[-1])
+                except Exception as pe:
+                    # Prophet 仍不可用（如 numpy 未降级 / 缺 cmdstanpy）时退化为线性拟合，
+                    # 保证「整体店铺趋势」始终是真实数学结果，而不是让 LLM 瞎编
+                    print(f"Prophet 不可用，改用线性拟合：{pe}")
+                    x = _np.arange(len(daily_sales), dtype=float)
+                    y = daily_sales['y'].to_numpy(dtype=float)
+                    slope, intercept = _np.polyfit(x, y, 1)
+                    trend_start = float(intercept)
+                    trend_end = float(intercept + slope * (len(daily_sales) - 1))
+
                 trend_direction = "上升" if trend_end > trend_start else "下降"
                 pct_change = abs((trend_end - trend_start) / trend_start) * 100 if trend_start != 0 else 0
-                
-                findings["整体店铺趋势"] = f"Prophet 分析显示，分析周期内销量呈 {trend_direction} 趋势，变化幅度为 {pct_change:.0f}%。"
+                findings["整体店铺趋势"] = f"趋势分析显示，分析周期内销量呈 {trend_direction} 趋势，变化幅度为 {pct_change:.0f}%。"
         except Exception as e:
-            pass # Silently drop if Prophet fails on small datasets
+            pass  # 数据量不足等极端情况静默跳过
             
         return {"findings": findings, "chart_data": chart_data}
 
@@ -101,7 +118,7 @@ def analyze_seasonality():
 
 
 def generate_forecast_report():
-    """ Generates math stats then asks Ollama to format as Markdown. """
+    """ 生成数学统计信息，然后让Ollama将其格式化为Markdown报告。 """
     analysis_result = analyze_seasonality()
     
     if "error" in analysis_result:
@@ -112,7 +129,7 @@ def generate_forecast_report():
     
     stats_json = json.dumps(stats_data, indent=2)
 
-    # Use the centralized dynamic configuration for consistency across agents
+    # 使用集中式动态配置以确保各代理之间的一致性
     model_name = get_current_model("forecast")
     
     try:
@@ -141,7 +158,7 @@ def generate_forecast_report():
         
         markdown_content = response.content.strip()
         
-        # Clean up any potential markdown code block wrappers
+        # 清理任何可能的 Markdown 代码块包装符
         if markdown_content.startswith("```json"):
             markdown_content = markdown_content[7:].strip()
         elif markdown_content.startswith("```"):
@@ -169,7 +186,7 @@ def generate_forecast_report():
         return err_dict
 
 def _generate_error_md(title, message):
-    """Helper to generate a styled error block as a proper response dict."""
+    """生成一个 styled error block 作为 proper response dict."""
     md = f"""# ❌ {title}
 
 **错误详情：**
@@ -179,13 +196,12 @@ def _generate_error_md(title, message):
 
 
 # ── 后台预测生成状态 ──────────────────────────────
-_forecast_status = {"state": "idle"}  # idle | generating | done | error
-
+# idle: 空闲, generating: 生成中, done: 完成, error: 错误
+_forecast_status = {"state": "idle"}
 
 def get_forecast_status() -> dict:
     """返回当前后台预测生成状态。"""
     return _forecast_status
-
 
 def _run_forecast_and_save():
     """在后台线程中生成预测并落库。"""

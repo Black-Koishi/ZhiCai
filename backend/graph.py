@@ -7,7 +7,7 @@ from backend.services.compliance import run_compliance, save_compliance_explanat
 from backend.services.orders import generate_and_store_pdf
 from backend.services.suppliers import onboard_supplier_from_text
 
-# 1. Define State
+# 1. 定义 State, 用于存储智能体的状态
 class AgentState(TypedDict):
     input_text: str
     routing_decision: str
@@ -21,22 +21,22 @@ class AgentState(TypedDict):
     gatekeeper_results: list[dict]
     order_ids: list[int]
 
-# 2. Define Nodes
+# 2. 编排器节点
 def orchestrator_node(state: AgentState):
-    """
-    Analyzes input and decides where to route.
+    """ 
+    分析当前状态(用户输入)并决定路由到哪里。
     """
     input_text = state.get("input_text", "")
     orchestration = orchestrator_router(input_text)
-    decision = orchestration.decision
-    ui_actions = [action.model_dump() for action in orchestration.ui_actions]
-    chat_response = orchestration.chat_response
+    decision = orchestration.decision    # 编排器判定结果
+    ui_actions = [action.model_dump() for action in orchestration.ui_actions]   # 编排器识别的ui操作
+    chat_response = orchestration.chat_response    # 编排器输出
     
     steps = list(state.get("steps", []))
     
     display_decision = decision
     if decision == "unknown" and (ui_actions or chat_response):
-        display_decision = "内联 UI / 直接回复"
+        display_decision = "界面跳转 / 直接回复"
         
     steps.append(f"编排器：已分析输入，路由到 {display_decision}。")
     
@@ -66,7 +66,7 @@ def agent_email_node(state: AgentState):
         try:
             saved = analyze_email(email_id, email["body"])
             if not saved:
-                steps.append(f"邮件智能体：无法从 '{email_id}' 提取数据，已跳过。")
+                steps.append(f"邮件智能体：无法从 '{email_id}' 分析完整需求，已跳过。")
                 continue
             steps.append(
                 f"📧 邮件 '{email_id}'：'{saved.get('item_name', '?')}' "
@@ -100,8 +100,8 @@ def compliance_node(state: AgentState):
     analyses = get_email_analyses_by_status("analyzed")
     if not analyses:
         return {
-            "output_text": "当前没有需要合规检查的邮件（仅检查「高/中/低优先」状态）。",
-            "steps": steps + ["合规智能体：没有处于「高/中/低优先」状态的邮件。"],
+            "output_text": "当前没有需要合规检查的邮件。",
+            "steps": steps + ["合规智能体：没有需要合规检查的邮件。"],
             "gatekeeper_results": [],
             "order_ids": [],
         }
@@ -143,8 +143,8 @@ def compliance_node(state: AgentState):
 
 def pdf_node(state: AgentState):
     """
-    Generates a PDF Purchase Order for a specific order ID extracted from user input.
-    User says: 'generate pdf for order 14' → extracts 14 → generates PDF → returns download path.
+    根据用户输入中提取的特定订单编号生成一份 PDF 购货订单。
+    用户说：“生成订单 14 的 PDF”  → 生成 PDF → 返回下载路径。
     """
     import re
     import os
@@ -152,7 +152,8 @@ def pdf_node(state: AgentState):
     steps = list(state.get("steps", [])) + ["PDF 智能体：正在启动 PDF 生成..."]
     input_text = state.get("input_text", "")
 
-    # Extract order ID from input (e.g. 'generate pdf for order 14' → 14)
+    # 从输入中提取订单编号（例如：“生成订单 14 的 PDF” → 14）
+    # 正则表达式
     numbers = re.findall(r'\d+', input_text)
     if not numbers:
         return {
@@ -166,7 +167,7 @@ def pdf_node(state: AgentState):
     order = get_order_by_id(order_id)
     if not order:
         return {
-            "output_text": f"未找到订单 #{order_id}。可通过 'GET /orders' 查看有效 ID。",
+            "output_text": f"未找到订单 #{order_id}, 请检查订单是否存在。",
             "steps": steps + [f"PDF 智能体：数据库中未找到订单 #{order_id}。"]
         }
 
@@ -205,19 +206,19 @@ def pdf_node(state: AgentState):
 
 def unknown_node(state: AgentState):
     """
-    Handles unclear input or pure UI navigation requests.
+    处理不明确的输入或单纯的用户界面导航请求。
     """
     steps = list(state.get("steps", []))
     output_text = state.get("output_text", "")
     
-    # If orchestrator provided a chat response, use it
+    # 如果编排器提供了聊天回复，则使用该回复。
     if isinstance(output_text, str) and output_text and not output_text.startswith("抱歉，我无法判断"):
         steps.append("编排器：已提供直接回复。")
         return {
             "output_text": output_text,
             "steps": steps
         }
-        
+    
     ui_actions = state.get("ui_actions", [])
     if ui_actions:
         steps.append("编排器：已执行 UI 操作，请求已完成。")
@@ -299,7 +300,7 @@ def forecast_node(state: AgentState):
         "order_ids": [],
     }
 
-# 3. Define Conditional Logic
+# 3. 判断服务是否开启
 def route_decision(state: AgentState) -> Literal["agent_email", "agent_compliance", "agent_pdf", "agent_supplier", "agent_forecast", "unknown", "service_unavailable"]:
     decision = state["routing_decision"]
     agent_enabled_map = {
@@ -320,10 +321,10 @@ def route_decision(state: AgentState) -> Literal["agent_email", "agent_complianc
     
     return "unknown"
 
-# Build Graph
+# 建图
 workflow = StateGraph(AgentState)
 
-# Add nodes
+# 添加节点
 workflow.add_node("orchestrator", orchestrator_node)
 workflow.add_node("agent_email", agent_email_node)
 workflow.add_node("agent_compliance", compliance_node)
@@ -333,10 +334,10 @@ workflow.add_node("agent_forecast", forecast_node)
 workflow.add_node("unknown", unknown_node)
 workflow.add_node("service_unavailable", service_unavailable_node)
 
-# Set entry point
+# 设置入口
 workflow.set_entry_point("orchestrator")
 
-# Add conditional edges
+# 添加条件边
 workflow.add_conditional_edges(
     "orchestrator",
     route_decision,
@@ -351,7 +352,7 @@ workflow.add_conditional_edges(
     }
 )
 
-# Add edges to END
+# 连到终点
 workflow.add_edge("agent_email", END)
 workflow.add_edge("agent_compliance", END)
 workflow.add_edge("agent_pdf", END)
@@ -360,5 +361,5 @@ workflow.add_edge("agent_forecast", END)
 workflow.add_edge("unknown", END)
 workflow.add_edge("service_unavailable", END)
 
-# Compile
+# 编译图
 app = workflow.compile()

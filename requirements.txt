@@ -7,6 +7,7 @@ ollama
 pytest
 # Data Analysis & Forecasting
 pandas==2.2.0
+numpy<2            # prophet 1.1.5 依赖已删除的 np.float_，仅兼容 NumPy 1.x
 prophet==1.1.5
 fastapi
 uvicorn

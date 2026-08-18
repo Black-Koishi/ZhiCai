@@ -5,34 +5,37 @@ from datetime import datetime
 import os
 from pathlib import Path
 
-# DB is located at backend/data/procurement.db
+# 数据库文件位于 backend/data/procurement.db
 DB_DIR = Path(__file__).resolve().parent / "data"
 DB_NAME = str(DB_DIR / "procurement.db")
 
 def get_db_connection():
+    """获取数据库连接"""
     conn = sqlite3.connect(DB_NAME)
     conn.row_factory = sqlite3.Row
     return conn
 
 def init_db():
-    # Database initialization is now handled by scripts/db_init.py
-    # We just ensure the directory exists here just in case.
+    """初始化数据库(轻量迁移, 给老版本数据库做属性填充, 幂等, 对新版本无影响)"""
+    # 数据库初始数据由 scripts/db_init.py 提供
+    # 确保数据库目录存在
     DB_DIR.mkdir(parents=True, exist_ok=True)
     # 轻量迁移：确保 vendors 表包含 category 列、orders 表包含 status 列
     conn = get_db_connection()
     try:
+        # 确保 vendors 表包含 category 列
         cols = [r["name"] for r in conn.execute("PRAGMA table_info(vendors)")]
         if "category" not in cols:
             conn.execute("ALTER TABLE vendors ADD COLUMN category TEXT")
             conn.commit()
-
+        # 确保 orders 表包含 status 列
         ocols = [r["name"] for r in conn.execute("PRAGMA table_info(orders)")]
         if "status" not in ocols:
             conn.execute("ALTER TABLE orders ADD COLUMN status TEXT DEFAULT 'draft'")
             # 迁移时的存量订单（mock 历史数据）视为已完成
             conn.execute("UPDATE orders SET status = 'received'")
             conn.commit()
-
+        # 确保 emails 表包含 analysis_status 列、analysis_error 列、attachments 列
         ecols = [r["name"] for r in conn.execute("PRAGMA table_info(emails)")]
         if "analysis_status" not in ecols:
             conn.execute("ALTER TABLE emails ADD COLUMN analysis_status TEXT")
@@ -59,8 +62,6 @@ def init_db():
             conn.execute("ALTER TABLE email_analysis ADD COLUMN budget REAL")
             conn.commit()
 
-        # 已废弃的部门预算表：直接删除
-        conn.execute("DROP TABLE IF EXISTS budgets")
         conn.commit()
     finally:
         conn.close()
@@ -68,7 +69,8 @@ def init_db():
 
 def save_emails(emails):
     """
-    Upserts a list of email dictionaries into the database.
+    upsert一批邮件字典到数据库
+    upsert: 插入或更新, 如果id重复, 则更新, 否则插入
     """
     conn = get_db_connection()
     c = conn.cursor()
@@ -102,7 +104,9 @@ def save_emails(emails):
 
 def get_emails(folder, limit=50, offset=0):
     """
-    Retrieves emails for a specific folder with pagination.
+    获取特定文件夹的邮件, 支持分页
+    inbox: 收件箱
+    sent: 已发送
     """
     conn = get_db_connection()
     c = conn.cursor()

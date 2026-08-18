@@ -1,5 +1,5 @@
 """
-Pydantic models shared across agents.
+跨Agent共享的 Pydantic 模型。
 """
 from typing import List, Optional, Literal
 from pydantic import BaseModel, Field

@@ -10,8 +10,8 @@ from backend.agents.config import get_compliance_llm
 
 def run_gatekeeper_checks(analysis: dict) -> dict:
     """
-    Rule-based compliance checks against inventory and policies.
-    Returns: { 'passed': bool, 'failures': [str], 'warnings': [str] }
+    基于大模型的对库存, 预算, 重复订单, 仓库容量, 政策的合规性检查。
+    Returns：{ 'passed'： bool， 'failures': [str], 'warnings'： [str] }
     """
     from backend.database import get_db_connection
 
@@ -25,15 +25,15 @@ def run_gatekeeper_checks(analysis: dict) -> dict:
     conn = get_db_connection()
     c = conn.cursor()
     try:
-        # ── Check 1: Inventory ──────────────────────────
+        # ── Check 1: 库存 ──────────────────────────
         if item_id:
             c.execute("SELECT qty_on_hand, min_qty, max_capacity FROM inventory WHERE item_id = ?", (item_id,))
             inv = c.fetchone()
             if inv:
-                if inv['qty_on_hand'] > inv['min_qty']:
+                if inv['qty_on_hand'] > 3*inv['min_qty']:
                     warnings.append(
                         f"库存：'{item_name}' 的库存为 {inv['qty_on_hand']} 件 "
-                        f"（高于最小阈值 {inv['min_qty']}）。订单可能不紧急。"
+                        f"（高于最小阈值三倍 {3*inv['min_qty']}）。订单可能不紧急。"
                     )
                 projected = inv['qty_on_hand'] + quantity
                 if inv['max_capacity'] > 0 and projected > inv['max_capacity']:
@@ -42,11 +42,11 @@ def run_gatekeeper_checks(analysis: dict) -> dict:
                         f"（{projected} > {inv['max_capacity']}）。"
                     )
             else:
-                warnings.append(f"库存：未找到 item_id={item_id} 的记录。")
+                failures.append(f"库存：未找到 item_id={item_id} 的记录。")
         else:
-            warnings.append("库存：目录中未找到该物品 — 已跳过检查。")
+            failures.append("库存：目录中未找到该物品 — 已跳过检查。")
 
-        # ── Check 2: Policies ───────────────────────────
+        # ── Check 2: 政策 ───────────────────────────
         c.execute("SELECT value FROM policies WHERE key = 'max_single_order_amount'")
         row = c.fetchone()
         if row and total_cost > float(row['value']):
@@ -69,14 +69,14 @@ def run_gatekeeper_checks(analysis: dict) -> dict:
                         f"低于最低要求 {min_score}。"
                     )
 
-        # ── Check 2b: Budget（申请方预算，硬性）──
+        # ── Check 2b: 预算（申请方预算，硬性）──
         budget = analysis.get('budget')
         if budget is not None and budget > 0 and total_cost > budget:
             failures.append(
                 f"预算：采购成本 ${total_cost:,.2f} 超出申请方预算 ${budget:,.2f}。"
             )
 
-        # ── Check 3: Soft rules（软提醒：不拦截）──
+        # ── Check 3: 软提醒：不拦截──
         if item_id:
             from backend.database import get_item_order_history
             history = get_item_order_history(item_id, limit=10)
@@ -156,7 +156,7 @@ def explain_compliance_result(analysis: dict, gate_result: dict) -> dict:
 - 全部通过但存在「软提醒项」→ 中
 - 全部通过且无任何提醒 → 低
 
-请只输出一个 JSON 对象（不要输出其他文字），格式：
+请只输出一个 JSON Scheam（不要输出其他文字），格式：
 {{"risk_level": "低/中/高", "risk_points": ["...", "..."], "suggestions": ["...", "..."]}}
 
 要求：
@@ -165,10 +165,11 @@ def explain_compliance_result(analysis: dict, gate_result: dict) -> dict:
 
     try:
         response = get_compliance_llm().invoke([
-            SystemMessage(content="你是一名专业的采购合规专员。请只输出一个 JSON 对象，不要输出其他文字。"),
+            SystemMessage(content="你是一名专业的采购合规专员。请只输出一个 JSON Schema，不要输出其他文字。"),
             HumanMessage(content=prompt)
         ])
         content = response.content.strip()
+
         if content.startswith("```json"):
             content = content[7:-3]
         elif content.startswith("```"):

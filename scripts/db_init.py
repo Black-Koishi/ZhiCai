@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS forecasts(
 conn = sqlite3.connect(str(DB_PATH))
 conn.executescript(schema)
 
-# seed a couple of rows
+# 种子数据
 #conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,approved,ext_score) VALUES (1,'顶点公司','sales@acme.example',1,82)")
 #conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (1,'M4 Stainless Screws','M4-SS-100','box',12.50,1)")
 #conn.execute("INSERT OR IGNORE INTO policies(key,value) VALUES ('max_single_order_amount','50000')")
@@ -135,7 +135,7 @@ conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_sco
 conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (29,'太平洋包装','sales@pacificpack.com','555-0129',1,88)")
 conn.execute("INSERT OR IGNORE INTO vendors(id,name,email,phone,approved,ext_score) VALUES (30,'铁甲轴承','supply@ironcladbearings.com','555-0130',1,84)")
 
-# ---------------- Items ----------------
+# 物品
 conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (1,'冷轧钢板 2mm','RAW-STEEL-2MM','sheet',45,5)")
 conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (2,'铝合金棒 6061','RAW-ALU-6061','bar',32,5)")
 conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (3,'铜线 12AWG 卷','RAW-CU-12AWG','roll',120,5)")
@@ -217,13 +217,13 @@ conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_ve
 conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (79,'四斗文件柜','OFF-CABINET-4D','unit',240,13)")
 conn.execute("INSERT OR IGNORE INTO items(id,name,sku,unit,unit_price,default_vendor_id) VALUES (80,'桌面文具套装','OFF-STATION-SET','set',35,13)")
 
-# ---------------- Policies ----------------
+# 策略
 conn.execute("INSERT OR IGNORE INTO policies(key,value) VALUES ('max_single_order_amount','100000')")
 conn.execute("INSERT OR IGNORE INTO policies(key,value) VALUES ('min_vendor_score','80')")
 conn.execute("INSERT OR IGNORE INTO policies(key,value) VALUES ('max_open_orders','500')")
 
-# ---------------- Inventory (Expanded Capacity) ----------------
-# Provide baseline inventory for ALL items (1-80)
+# 库存
+# 为所有物品（1-80）提供基础库存
 for i in range(1, 81):
     conn.execute(f"INSERT OR IGNORE INTO inventory(item_id, qty_on_hand, max_capacity, min_qty) VALUES ({i}, 200, 5000, 50)")
 conn.execute("INSERT OR IGNORE INTO inventory(item_id, qty_on_hand, max_capacity, min_qty) VALUES (54,20,200,40)")
@@ -254,7 +254,7 @@ conn.execute("INSERT OR IGNORE INTO inventory(item_id, qty_on_hand, max_capacity
 conn.execute("INSERT OR IGNORE INTO inventory(item_id, qty_on_hand, max_capacity, min_qty) VALUES (79,80,800,160)")
 conn.execute("INSERT OR IGNORE INTO inventory(item_id, qty_on_hand, max_capacity, min_qty) VALUES (80,40,400,80)")
 
-# Update existing inventory limits to support more storage
+# 更新现有库存限制以支持更多存储
 conn.execute("UPDATE inventory SET max_capacity = max_capacity * 2 WHERE item_id <= 50")
 conn.execute("UPDATE policies SET value = '100000' WHERE key = 'max_single_order_amount'")
 
@@ -262,7 +262,7 @@ conn.execute("UPDATE policies SET value = '100000' WHERE key = 'max_single_order
 
 
 
-# ---------------- Mock Orders ----------------
+# 模拟订单
 import csv
 CSV_PATH = Path(__file__).resolve().parents[1] / "seed-data" / "mock_orders.csv"
 

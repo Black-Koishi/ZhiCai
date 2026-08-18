@@ -1,5 +1,5 @@
 """
-Email Analysis Agent: Extracts structured procurement data from email bodies.
+电子邮件分析智能体：从电子邮件正文中提取结构化的采购数据。
 """
 import json
 
@@ -11,8 +11,8 @@ from backend.agents.models import EmailExtraction
 
 def analyze_email_content(body: str) -> dict:
     """
-    Extracts structured procurement data from an email body using the LLM.
-    Priority logic: High (<= 7 days), Medium (7-30 days), Low (> 30 days).
+    使用语言模型从电子邮件正文中提取结构化的采购数据。
+    优先级逻辑：高（<= 7 天），中（7 - 30 天），低（> 30 天）。
     """
     system_prompt = """你是一个采购分析智能体。从以下邮件中提取订单详情。
 你必须提取：物品名称、数量（数字）、需要在多少天内交付、预算总金额。
@@ -35,14 +35,14 @@ is_procurement_request：判断该邮件是否为真实的采购/询价需求。
             HumanMessage(content=body)
         ])
         content = response.content.strip()
-        # Remove markdown code blocks if present
+        # # 如果存在 Markdown 代码块则删除它们
         if content.startswith("```json"):
              content = content[7:-3]
         elif content.startswith("```"):
              content = content[3:-3]
              
         data = json.loads(content)
-        # Validate and return
+        # 验证并返回
         extracted = EmailExtraction(**data)
         return extracted.model_dump()
     except Exception as e:

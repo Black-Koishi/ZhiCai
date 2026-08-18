@@ -42,8 +42,6 @@ async def chat_endpoint(request: ChatRequest):
 
     try:
         # 放到线程池执行，避免同步的 LLM 调用阻塞 FastAPI 事件循环
-        # 超时由底层 LLM 调用各自控制（config.get_llm 里 60 秒），这里不设整体超时，
-        # 否则「分析邮件」这类需要多封邮件逐封调 LLM 的批量任务会被误判超时
         result = await asyncio.to_thread(workflow.invoke, initial_state)
 
         return ChatResponse(
@@ -55,6 +53,7 @@ async def chat_endpoint(request: ChatRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# 暂时没用
 @router.get("/health")
 async def health_check():
     return {"status": "ok"}
