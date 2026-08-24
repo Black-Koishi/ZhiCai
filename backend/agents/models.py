@@ -30,6 +30,7 @@ class OrchestrationResponse(BaseModel):
 
 
 class EmailExtraction(BaseModel):
+    """邮件分析结果"""
     item_name: str = Field(description="The name or description of the requested product/item.")
     quantity: int = Field(description="The numeric quantity requested.")
     days_available: int = Field(description="The number of days within which the items are needed.")

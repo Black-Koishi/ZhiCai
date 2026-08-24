@@ -13,6 +13,7 @@ from backend.database import (
 )
 from backend.services.compliance import (
     run_compliance,
+    run_compliance_and_record,
     save_compliance_explanation,
     send_order_confirmation,
     send_cancel_notification,
@@ -24,6 +25,7 @@ router = APIRouter()
 
 @router.post("/procurement/manual/compliance")
 async def manual_compliance_check(payload: dict):
+    """手动合规检查：按物品名称构造上下文并运行检查。"""
     item_name = payload.get("item_name")
     quantity = payload.get("quantity", 1)
     expected_date_str = payload.get("expected_date")  # YYYY-MM-DD
@@ -71,12 +73,14 @@ async def manual_compliance_check(payload: dict):
         "explanation": result["explanation"],
         "review": result["review"],
         "total_cost": total_cost,
+        "computed_priority": fake_analysis["priority"],
         "fake_analysis_context": fake_analysis,
     }
 
 
 @router.post("/procurement/manual/order")
 async def manual_order_create(payload: dict):
+    """手动下单：用合规检查返回的上下文创建订单。"""
     context = payload.get("context")
     if not context:
         raise HTTPException(status_code=400, detail="缺少订单上下文（需先运行合规检查）。")
@@ -97,18 +101,13 @@ async def manual_order_create(payload: dict):
 
 @router.post("/procurement/{email_id}/compliance")
 async def check_compliance(email_id: str):
+    """对指定邮件的分析运行合规检查并更新状态。"""
     try:
         analysis = get_email_analysis(email_id)
         if not analysis:
             raise HTTPException(status_code=404, detail="未找到分析")
 
-        result = await asyncio.to_thread(run_compliance, analysis)
-        save_compliance_explanation(email_id, result["explanation"])
-        set_email_analysis_status(email_id, "pending_review" if result["passed"] else "failed_compliance")
-
-        # 合规未通过：直接把原因通知发件人，无需人工填写
-        if not result["passed"]:
-            await asyncio.to_thread(send_cancel_notification, email_id, result["explanation"])
+        result = await asyncio.to_thread(run_compliance_and_record, email_id, analysis)
 
         return {"status": "success", "passed": result["passed"], "explanation": result["explanation"], "review": result["review"]}
     except HTTPException as he:
@@ -138,6 +137,7 @@ async def cancel_procurement_request(email_id: str, payload: dict):
 
 @router.post("/procurement/{email_id}/order")
 async def generate_procurement_order(email_id: str):
+    """为指定邮件的分析创建订单、生成 PDF 并通知发件人。"""
     try:
         analysis = get_email_analysis(email_id)
         if not analysis:
@@ -171,12 +171,7 @@ async def compliance_by_item_name(payload: dict):
     if not analysis:
         raise HTTPException(status_code=404, detail=f"未找到 '{item_name}' 的邮件分析")
 
-    result = await asyncio.to_thread(run_compliance, analysis)
-    save_compliance_explanation(analysis["email_id"], result["explanation"])
-    set_email_analysis_status(analysis["email_id"], "pending_review" if result["passed"] else "failed_compliance")
-
-    if not result["passed"]:
-        await asyncio.to_thread(send_cancel_notification, analysis["email_id"], result["explanation"])
+    result = await asyncio.to_thread(run_compliance_and_record, analysis["email_id"], analysis)
 
     return {
         "status": "success",

@@ -1,4 +1,4 @@
-"""需求预测路由。"""
+"""历史需求趋势分析路由。"""
 import asyncio
 
 from fastapi import APIRouter, HTTPException
@@ -11,7 +11,7 @@ router = APIRouter()
 
 @router.get("/forecast/status")
 async def api_get_forecast_status():
-    """返回后台预测生成状态（idle / generating / done / error）。"""
+    """返回后台趋势分析状态（idle / generating / done / error）。"""
     try:
         return {"status": "success", "data": get_forecast_status()}
     except Exception as e:
@@ -20,17 +20,19 @@ async def api_get_forecast_status():
 
 @router.get("/forecast/latest")
 async def api_get_latest_forecast():
+    """返回最新一条需求趋势分析记录。"""
     try:
         forecast = get_latest_forecast()
         if forecast:
             return {"status": "success", "data": forecast}
-        return {"status": "not_found", "message": "未找到预测记录。"}
+        return {"status": "not_found", "message": "未找到需求趋势分析记录。"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.get("/forecast/history")
 async def api_get_forecast_history():
+    """返回需求趋势分析历史。"""
     try:
         history = get_forecast_history()
         return {"status": "success", "data": history}
@@ -40,18 +42,19 @@ async def api_get_forecast_history():
 
 @router.get("/forecast/{forecast_id}")
 async def api_get_forecast_by_id(forecast_id: int):
+    """按 ID 返回需求趋势分析记录。"""
     try:
         forecast = get_forecast_by_id(forecast_id)
         if forecast:
             return {"status": "success", "data": forecast}
-        return {"status": "not_found", "message": "未找到预测记录。"}
+        return {"status": "not_found", "message": "未找到需求趋势分析记录。"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 
 @router.post("/forecast/generate")
 async def api_generate_forecast():
-    """运行历史数学分析 + LLM 综合，生成预测报告。"""
+    """运行历史数据分析并由 LLM 整理需求趋势报告。"""
     import json
 
     from backend.forecast import generate_forecast_report

@@ -1,8 +1,7 @@
 """
 Backend agents package.
 
-Re-exports all public agent functions so existing imports like
-`from backend.agents import convert_num_to_text` continue to work.
+Re-exports the agent functions used by graph nodes and business services.
 """
 
 from backend.agents.orchestrator import orchestrator_router

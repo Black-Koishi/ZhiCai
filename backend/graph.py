@@ -3,7 +3,7 @@ from langgraph.graph import StateGraph, END
 from backend.agents import orchestrator_router
 from backend.database import get_unanalyzed_emails, get_email_analyses_by_status, get_order_by_id, set_email_analysis_status
 from backend.services.emails import analyze_email
-from backend.services.compliance import run_compliance, save_compliance_explanation, send_cancel_notification
+from backend.services.compliance import run_compliance_and_record
 from backend.services.orders import generate_and_store_pdf
 from backend.services.suppliers import onboard_supplier_from_text
 
@@ -110,8 +110,7 @@ def compliance_node(state: AgentState):
         item_name = analysis.get("item_name", "未知")
         email_id = analysis.get("email_id", "?")
         try:
-            result = run_compliance(analysis)
-            save_compliance_explanation(email_id, result["explanation"])
+            result = run_compliance_and_record(email_id, analysis)
             gatekeeper_results.append({
                 "email_id": email_id,
                 "item_name": item_name,
@@ -119,12 +118,9 @@ def compliance_node(state: AgentState):
             })
 
             if result["passed"]:
-                set_email_analysis_status(email_id, "pending_review")
                 passed_count += 1
                 steps.append(f"✅ 通过  [{item_name}] → 待审核")
             else:
-                set_email_analysis_status(email_id, "failed_compliance")
-                send_cancel_notification(email_id, result["explanation"])
                 failed_count += 1
                 steps.append(f"❌ 未通过  [{item_name}]（已通知发件人）：{result['explanation']}")
         except Exception as e:
@@ -229,14 +225,12 @@ def unknown_node(state: AgentState):
     
     steps.append("编排器：无法判断意图，已停止执行。")
     return {
-        "output_text": "抱歉，我无法判断你的意图。请尝试询问关于收件箱或进行数字转换的问题。",
+        "output_text": "抱歉，我无法判断你的意图。请尝试“分析邮件”“运行合规检查”或“生成需求趋势报告”。",
         "steps": steps
     }
 
 def service_unavailable_node(state: AgentState):
-    """
-    Handles disabled agents.
-    """
+    """处理被禁用的智能体：返回服务不可用提示。"""
     return {
         "output_text": "服务不可用：所需智能体当前已禁用。",
         "steps": state.get("steps", []) + ["编排器：智能体已禁用，服务不可用。"]
@@ -278,18 +272,18 @@ def supplier_node(state: AgentState):
     }
 
 def forecast_node(state: AgentState):
-    """启动后台预测生成，立即返回；完成后前端轮询状态并提示用户。"""
+    """启动后台需求趋势分析，立即返回；完成后前端轮询状态并提示用户。"""
     from backend.forecast import start_forecast_generation
 
-    steps = list(state.get("steps", [])) + ["预测智能体：正在后台启动预测生成..."]
+    steps = list(state.get("steps", [])) + ["需求分析智能体：正在后台启动趋势分析..."]
     started = start_forecast_generation()
     if started:
-        output = "🔮 正在后台生成预测报告，完成后会通知你。"
-        steps.append("预测智能体：已在后台启动预测生成。")
+        output = "正在后台生成需求趋势报告，完成后会通知你。"
+        steps.append("需求分析智能体：已在后台启动趋势分析。")
         ui_actions = [{"action_type": "start_forecast", "params": {}}]
     else:
-        output = "预测任务正在生成中，请稍候。"
-        steps.append("预测智能体：已有预测任务正在生成。")
+        output = "需求趋势报告正在生成中，请稍候。"
+        steps.append("需求分析智能体：已有分析任务正在运行。")
         ui_actions = []
 
     return {
@@ -302,6 +296,7 @@ def forecast_node(state: AgentState):
 
 # 3. 判断服务是否开启
 def route_decision(state: AgentState) -> Literal["agent_email", "agent_compliance", "agent_pdf", "agent_supplier", "agent_forecast", "unknown", "service_unavailable"]:
+    """根据编排结果与各智能体开关，决定下一步路由到哪个节点。"""
     decision = state["routing_decision"]
     agent_enabled_map = {
         "email":      state.get("agent_email_enabled", True),

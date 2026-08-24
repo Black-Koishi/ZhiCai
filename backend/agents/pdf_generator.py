@@ -34,7 +34,7 @@ def _build_po_body(order: dict) -> str:
 
 
 def sanitize_text(text: str) -> str:
-    """Replace certain special characters for stable PDF rendering (keep Chinese)."""
+    """替换特殊字符以保证 PDF 渲染稳定（保留中文）。"""
     replacements = {
         "\u2014": "-",    # em dash
         "\u2013": "-",    # en dash
@@ -56,7 +56,7 @@ def sanitize_text(text: str) -> str:
 
 
 def _load_cjk_font(pdf) -> str:
-    """Register a CJK-capable font and return its family name (fallback to Helvetica)."""
+    """注册支持中文的字体并返回字体名（无则回退 Helvetica）。"""
     font_candidates = [
         r"C:\Windows\Fonts\simhei.ttf",
         r"C:\Windows\Fonts\SourceHanSansCN-Normal.ttf",

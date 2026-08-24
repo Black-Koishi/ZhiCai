@@ -48,7 +48,7 @@ export function Sidebar({
                 {!isCollapsed && (
                     <div className="ml-3 flex flex-col">
                         <span className="font-bold text-lg leading-none tracking-tight">智采<span className="text-primary"> ZhiCai</span></span>
-                        <span className="text-[10px] text-muted-foreground uppercase tracking-widest font-semibold mt-1">v1.0.0</span>
+                        <span className="text-[10px] text-muted-foreground tracking-widest font-semibold mt-1">智能采购管理</span>
                     </div>
                 )}
             </div>
@@ -102,7 +102,7 @@ export function Sidebar({
                     <NavItem
                         view="forecast"
                         icon={TrendingUp}
-                        label="预测"
+                        label="趋势"
                         activeView={activeView}
                         setActiveView={setActiveView}
                         isCollapsed={isCollapsed}

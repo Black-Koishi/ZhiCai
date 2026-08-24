@@ -74,6 +74,7 @@ async def list_orders():
 
 @router.post("/orders/manual")
 async def create_manual_order_endpoint(request: ManualOrderRequest):
+    """手动下单：按物品名称匹配并运行合规检查后创建订单。"""
     item = get_item_by_name(request.item_name)
     if not item:
         raise HTTPException(status_code=404, detail="物品未找到")

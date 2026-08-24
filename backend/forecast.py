@@ -42,7 +42,7 @@ def analyze_seasonality():
         
         findings = {}
         
-        # 分析销量最高的15个物品
+        # 分析历史采购量最高的 15 个物料
         top_items = df.groupby('name')['qty'].sum().nlargest(15).index
         
         for item in top_items:
@@ -59,11 +59,11 @@ def analyze_seasonality():
                     if pct_increase > 25: # 强季节性趋势阈值
                         findings[item] = f"需求在 {peak_month} 激增，较月度平均增长 {pct_increase:.0f}%。"
                         
-        # Prophet 趋势分解在聚合的每日店铺销量上
+        # Prophet 在聚合后的每日采购量上估计整体趋势
         chart_data = [] # 数据数组, 专门用于 Recharts
         top_items_data = monthly_sales[monthly_sales['name'].isin(top_items)]
         
-        # 为 Recharts 准备稳定的透视表结构：行是月份，列是各商品的数量。
+        # 为 Recharts 准备稳定的透视表结构：行是月份，列是各物料的采购量。
         if not top_items_data.empty:
             pivot = top_items_data.pivot_table(index='month_num', columns='name', values='qty', aggfunc='sum').fillna(0)
             
@@ -97,7 +97,7 @@ def analyze_seasonality():
                     trend_end = float(forecast['trend'].iloc[-1])
                 except Exception as pe:
                     # Prophet 仍不可用（如 numpy 未降级 / 缺 cmdstanpy）时退化为线性拟合，
-                    # 保证「整体店铺趋势」始终是真实数学结果，而不是让 LLM 瞎编
+                    # 保证整体采购需求趋势来自确定性计算，而不是交给 LLM 生成
                     print(f"Prophet 不可用，改用线性拟合：{pe}")
                     x = _np.arange(len(daily_sales), dtype=float)
                     y = daily_sales['y'].to_numpy(dtype=float)
@@ -107,7 +107,7 @@ def analyze_seasonality():
 
                 trend_direction = "上升" if trend_end > trend_start else "下降"
                 pct_change = abs((trend_end - trend_start) / trend_start) * 100 if trend_start != 0 else 0
-                findings["整体店铺趋势"] = f"趋势分析显示，分析周期内销量呈 {trend_direction} 趋势，变化幅度为 {pct_change:.0f}%。"
+                findings["整体采购需求趋势"] = f"趋势分析显示，分析周期内采购量呈 {trend_direction} 趋势，变化幅度为 {pct_change:.0f}%。"
         except Exception as e:
             pass  # 数据量不足等极端情况静默跳过
             
@@ -118,7 +118,7 @@ def analyze_seasonality():
 
 
 def generate_forecast_report():
-    """ 生成数学统计信息，然后让Ollama将其格式化为Markdown报告。 """
+    """生成确定性统计信息，再由当前配置的 LLM 整理为结构化报告。"""
     analysis_result = analyze_seasonality()
     
     if "error" in analysis_result:
@@ -181,12 +181,12 @@ def generate_forecast_report():
         }
         
     except Exception as e:
-        err_dict = _generate_error_md("Ollama 智能体错误", f"无法连接 Ollama 或处理提示。详情：{str(e)}")
+        err_dict = _generate_error_md("模型调用错误", f"无法连接当前配置的模型服务或处理提示。详情：{str(e)}")
         err_dict["stats_json"] = stats_json
         return err_dict
 
 def _generate_error_md(title, message):
-    """生成一个 styled error block 作为 proper response dict."""
+    """生成一个格式化的错误块作为响应 dict。"""
     md = f"""# ❌ {title}
 
 **错误详情：**
@@ -195,22 +195,22 @@ def _generate_error_md(title, message):
     return {"error": True, "markdown": md.strip()}
 
 
-# ── 后台预测生成状态 ──────────────────────────────
+# ── 后台需求趋势分析状态 ──────────────────────────
 # idle: 空闲, generating: 生成中, done: 完成, error: 错误
 _forecast_status = {"state": "idle"}
 
 def get_forecast_status() -> dict:
-    """返回当前后台预测生成状态。"""
+    """返回当前后台趋势分析状态。"""
     return _forecast_status
 
 def _run_forecast_and_save():
-    """在后台线程中生成预测并落库。"""
+    """在后台线程中生成需求趋势报告并落库。"""
     global _forecast_status
     _forecast_status = {"state": "generating"}
     try:
         result = generate_forecast_report()
         if result.get("error") is True:
-            _forecast_status = {"state": "error", "message": result.get("markdown", "预测生成失败")}
+            _forecast_status = {"state": "error", "message": result.get("markdown", "需求趋势报告生成失败")}
             return
 
         from backend.database import save_forecast
@@ -226,7 +226,7 @@ def _run_forecast_and_save():
 
 
 def start_forecast_generation() -> bool:
-    """启动后台预测生成线程；若已在生成中则返回 False。"""
+    """启动后台趋势分析线程；若已有任务运行则返回 False。"""
     if _forecast_status.get("state") == "generating":
         return False
     t = threading.Thread(target=_run_forecast_and_save, daemon=True)

@@ -30,3 +30,6 @@ orders/
 /temp
 /reference
 *.log
+
+# ── 本地开发笔记（不提交）────────
+docs/development-issues.md

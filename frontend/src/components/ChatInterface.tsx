@@ -107,7 +107,7 @@ export function ChatInterface({
         { icon: ShieldCheck, text: "运行合规检查", desc: "审核已分析的采购请求" },
         { icon: Star, text: "显示高优先级邮件", desc: "跳转邮件并筛选高优先级" },
         { icon: ShoppingCart, text: "下单", desc: "示例：订购 10 个无绳电钻", command: "订购 10 个无绳电钻" },
-        { icon: TrendingUp, text: "生成预测报告", desc: "后台生成需求预测" },
+        { icon: TrendingUp, text: "生成趋势报告", desc: "分析历史采购需求" },
         { icon: Settings, text: "打开设置", desc: "配置智能体与邮箱" },
     ];
 
@@ -126,7 +126,7 @@ export function ChatInterface({
                             </h2>
                             <p className="text-muted-foreground mt-2">AI 多智能体采购助手</p>
                             <p className="text-sm text-muted-foreground/70 mt-1 max-w-md">
-                                用自然语言管理采购全流程：邮件分析、合规审核、订单管理、需求预测。
+                                用自然语言管理采购全流程：邮件分析、合规审核、订单管理、需求趋势分析。
                             </p>
 
                             <div className="flex items-center gap-2 text-xs text-muted-foreground/60 mt-10">

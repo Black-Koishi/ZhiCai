@@ -1,86 +1,119 @@
-# 智采 ZhiCai · 多智能体采购管理平台
+# 智采 ZhiCai
 
-> 一个**本地优先**的多智能体 AI 采购管理系统：用 **LangGraph** 编排多个专用智能体，把「收邮件 → 提取需求 → 合规审核 → 生成采购订单 PDF → 需求预测」这条完整采购链路自动化。前端为 React + Vite + Tailwind，后端为 FastAPI，数据存储在本地 SQLite。
+智采是一个本地优先的 AI 采购管理平台。系统使用 LangGraph 编排采购相关任务，将邮件需求提取、目录匹配、规则合规、人工审核、订单管理、PDF 生成和历史需求分析串联在同一套工作流中。
 
----
+项目采用 React + TypeScript 构建前端，FastAPI 提供后端 API，业务数据和生成文件默认保存在本地。模型默认通过 Ollama 运行，也可以按智能体切换到兼容 OpenAI API 的云端服务。
 
-## ✨ 核心特性
+## 核心能力
 
-| 能力 | 说明 |
-|---|---|
-| 🧠 多智能体编排 | 基于 LangGraph 的状态机：编排器（Orchestrator）解析意图并路由到邮件 / 合规 / 供应商 / 订单 / 预测智能体 |
-| 📧 邮件智能分析 | LLM 从非结构化邮件正文中提取物品、数量、交期、优先级，并自动匹配到物料与供应商目录 |
-| 🛡️ 合规守门 | 规则引擎（库存容量 / 采购政策 / 供应商评分）+ LLM 生成可读的审核解释 |
-| 📄 采购订单 PDF | 固定模板自动生成采购订单正文，fpdf2 渲染中文 PDF，支持一键下载 |
-| 📈 需求预测 | Meta Prophet 做季节性分解 + LLM 综合生成「执行概览 / 趋势 / 异常洞察」报告与交互图表 |
-| 🖥️ 智能体仪表盘 | 实时可视化每个智能体的状态、日志与「思考过程」 |
-| 💬 聊天驱动 UI | 用自然语言即可跳转页面、筛选邮件、触发 API、内嵌下单 |
-| 🔒 本地优先 | 统一 SQLite 数据库（`procurement.db`），离线可用，数据不出本机 |
+| 能力 | 当前实现 |
+| --- | --- |
+| 对话编排 | LangGraph 根据用户意图路由到邮件、合规、PDF、供应商或需求分析流程，并返回可执行的界面动作 |
+| 邮件需求提取 | 从 IMAP 或 Mailpit 邮件中提取物料、数量、预算、交期等采购字段，并匹配本地物料和供应商目录 |
+| 采购合规 | 使用确定性规则检查仓储容量、单笔金额、申请预算、供应商准入与评分；LLM 仅负责整理风险说明和建议 |
+| 人工审核与订单 | 合规通过后进入待审核状态，由用户确认后创建订单；也支持从界面或聊天手动发起采购 |
+| 采购订单 PDF | 使用固定采购订单模板和 fpdf2 生成 PDF，支持本地保存、下载和邮件发送 |
+| 供应商与物料管理 | 支持列表管理、自然语言建档、供应商评分和 SKU 生成 |
+| 历史需求分析 | 聚合历史订单，识别月度峰值与整体趋势，使用 Prophet 估计趋势并在不可用时回退到线性拟合，再由 LLM 生成结构化摘要 |
+| 本地数据账本 | 使用 SQLite 保存邮件、分析结果、目录、库存、政策、订单和分析报告 |
 
----
+## 工作方式
 
-## 🧰 技术栈
+```text
+邮件同步（IMAP / Mailpit）
+  → LLM 提取采购需求
+  → 物料与供应商目录匹配
+  → 确定性合规规则检查
+  → 人工审核
+  → 创建订单并生成 PDF
 
-- **后端**：Python 3.9+ · FastAPI · LangChain + LangGraph · Ollama（本地 LLM）· SQLite · fpdf2 · pandas + Prophet
-- **前端**：React 18 · TypeScript · Vite · Tailwind CSS · shadcn/ui (Radix) · framer-motion · recharts
-- **邮件**：IMAP / SMTP（默认 Gmail，可配置）
-
----
-
-## 🚀 快速开始
-
-### 前置条件
-
-1. **Python 3.9+**
-2. **Node.js 18+**
-3. **Ollama**：本地运行并拉取模型 `ollama pull mistral`
-
-### 1. 后端
-
-```bash
-# 创建虚拟环境（可选）
-python -m venv venv
-# Windows: venv\Scripts\activate    macOS/Linux: source venv/bin/activate
-
-pip install -r requirements.txt
-
-# 配置环境变量
-cp .env.example .env   # Windows: copy .env.example .env
+历史订单
+  → 月度聚合与趋势估计
+  → LLM 整理结构化洞察
+  → 图表与历史报告
 ```
 
-### 2. 初始化数据库
+编排器支持 `email`、`compliance`、`pdf`、`supplier` 和 `forecast` 五类任务路由。系统提供四组可独立配置的模型：编排器、邮件提取、合规解释和需求分析。供应商与物料建档复用邮件提取模型，PDF 生成不调用 LLM。
+
+## 技术栈
+
+- 后端：Python、FastAPI、LangChain、LangGraph、SQLite、fpdf2、pandas、Prophet
+- 模型：Ollama（默认）或兼容 OpenAI API 的云端服务
+- 前端：React 18、TypeScript、Vite、Tailwind CSS、Radix UI、Recharts、Framer Motion
+- 邮件：IMAP / SMTP；本地开发可使用 Mailpit
+
+## 快速开始
+
+### 环境要求
+
+- Python 3.11（推荐；当前 Prophet 依赖组合不建议使用 Python 3.13）
+- Node.js 18+
+- Ollama，以及已安装的默认模型 `mistral`
+
+```bash
+ollama pull mistral
+```
+
+### 1. 安装后端
+
+```bash
+python -m venv .venv
+
+# Windows PowerShell
+.\.venv\Scripts\Activate.ps1
+
+# macOS / Linux
+source .venv/bin/activate
+
+pip install -r requirements.txt
+```
+
+复制根目录环境变量模板：
+
+```bash
+cp .env.example .env
+# Windows PowerShell: Copy-Item .env.example .env
+```
+
+### 2. 初始化示例数据
 
 ```bash
 python scripts/db_init.py
 ```
 
-> 这会创建 `backend/data/procurement.db`，并写入示例物料目录（80 个物料、30 家供应商）、采购政策、库存与 mock 历史订单。
+该脚本会创建 `backend/data/procurement.db`，并写入 80 个示例物料、30 家示例供应商、库存与采购政策，以及 5,000 条历史订单。
 
-### 3. 前端
+### 3. 安装前端
 
 ```bash
 cd frontend
 npm install
-cp .env.example .env   # Windows: copy .env.example .env
+cp .env.example .env
+# Windows PowerShell: Copy-Item .env.example .env
 ```
 
-### 4. 启动
+### 4. 启动服务
+
+分别启动后端和前端：
 
 ```bash
-# 终端 A：后端
-uvicorn backend.api:app --reload        # http://localhost:8000
+# 终端 A：在项目根目录运行
+uvicorn backend.api:app --reload
 
-# 终端 B：前端
-cd frontend && npm run dev              # http://localhost:5173
+# 终端 B
+cd frontend
+npm run dev
 ```
 
-> Windows 也可直接运行根目录 `python quick_run.py`，会分别打开后端 / 前端两个新窗口。
+- 前端：http://localhost:5173
+- 后端：http://localhost:8000
+- Swagger API 文档：http://localhost:8000/docs
 
----
+Windows 用户完成依赖安装后，也可以在项目根目录运行 `python quick_run.py`，由脚本检查数据库并分别打开前后端窗口。
 
-## ⚙️ 配置
+## 模型与邮箱配置
 
-模型与 Ollama 地址通过根目录 `.env` 配置（复制自 `.env.example`）：
+根目录 `.env` 控制模型、跨域和邮箱连接。默认使用本地 Ollama：
 
 ```ini
 OLLAMA_BASE_URL=http://localhost:11434
@@ -91,121 +124,88 @@ COMPLIANCE_MODEL=mistral
 FORECAST_MODEL=mistral
 ```
 
-前端 API 地址通过 `frontend/.env` 配置（默认 `VITE_API_URL=http://localhost:8000`）。也可在「设置」页为每个智能体动态切换底层 LLM 模型。
+如需使用兼容 OpenAI API 的服务，可以为对应模型设置 provider，并配置服务地址和密钥：
 
-后端跨域来源通过 `CORS_ALLOWED_ORIGINS` 配置（逗号分隔，默认本地开发地址）。
-
----
-
-## 📦 项目结构
-
+```ini
+FORECAST_PROVIDER=openai
+CLOUD_BASE_URL=https://api.example.com/v1
+CLOUD_API_KEY=your-api-key
+FORECAST_MODEL=your-model-name
 ```
-multi-agent-ai-v2/
+
+真实邮箱接入使用 `SMTP_*`、`IMAP_*`、`EMAIL_USER` 和 `EMAIL_PASS` 配置项。也可以在前端“设置”页修改模型、云端服务和邮箱配置；配置会写入本地 `.env`。
+
+前端通过 `frontend/.env` 中的 `VITE_API_URL` 指向后端，默认值为 `http://localhost:8000`。
+
+## 数据边界
+
+- SQLite 数据库、邮件附件和采购订单 PDF 默认保存在本机，并已通过 `.gitignore` 排除。
+- 使用 Ollama 时，模型推理请求发送到配置的本地 Ollama 服务。
+- 使用云端模型时，完成任务所需的提示和业务内容会发送到所配置的云端 API；是否保存或处理这些数据取决于该服务提供方。
+- 接入真实邮箱时，系统会通过配置的 IMAP / SMTP 服务器读取和发送邮件。
+- `.env` 可能包含邮箱凭据和 API 密钥，不应提交到版本库。
+
+## 常用入口
+
+| 方法 | 路径 | 用途 |
+| --- | --- | --- |
+| `POST` | `/chat` | 对话编排入口 |
+| `POST` | `/emails/sync` | 同步邮件 |
+| `POST` | `/emails/analyze_all` | 分析未处理邮件 |
+| `POST` | `/procurement/{email_id}/compliance` | 对邮件需求执行合规检查 |
+| `POST` | `/procurement/{email_id}/order` | 审核后创建订单 |
+| `POST` | `/orders/manual` | 手动采购流程 |
+| `POST` | `/orders/{order_id}/generate-pdf` | 生成或重新生成订单 PDF |
+| `POST` | `/forecast/generate` | 生成历史需求趋势报告 |
+
+所有路由及请求结构以运行中的 Swagger 文档 `/docs` 为准。
+
+## 项目结构
+
+```text
+ZhiCai/
 ├── backend/
-│   ├── agents/                 # 各智能体实现
-│   │   ├── orchestrator.py     # 意图路由
-│   │   ├── email_analyzer.py   # 邮件结构化提取
-│   │   ├── compliance.py       # 合规守门 + 解释
-│   │   ├── pdf_generator.py    # 采购订单 PDF
-│   │   ├── supplier_onboarding.py # 供应商入驻
-│   │   ├── item_onboarding.py  # 物料建档
-│   │   ├── config.py           # 统一 LLM 配置
-│   │   └── models.py           # Pydantic 数据模型
-│   ├── data/                   # SQLite 数据库（gitignored）
-│   ├── services/               # 业务服务层（供 graph 与 REST 共用）
-│   │   ├── orders.py           # 订单 + PDF
-│   │   ├── emails.py           # 邮件分析
-│   │   ├── compliance.py       # 合规检查
-│   │   ├── suppliers.py        # 供应商
-│   │   └── items.py            # 物料
-│   ├── routers/                # API 路由（按业务域拆分）
-│   │   ├── chat.py             # 对话 / 健康检查
-│   │   ├── emails.py           # 邮件
-│   │   ├── database.py         # 数据库浏览
-│   │   ├── orders.py           # 订单
-│   │   ├── items.py            # 物料
-│   │   ├── suppliers.py        # 供应商
-│   │   ├── forecast.py         # 预测
-│   │   ├── procurement.py      # 采购流程
-│   │   └── settings.py         # 设置
-│   ├── api.py                  # 应用装配层（中间件 + 路由注册）
-│   ├── database.py             # 数据访问层
-│   ├── email_service.py        # IMAP/SMTP
-│   ├── forecast.py             # Prophet + LLM 预测
-│   └── graph.py                # LangGraph 状态机
-├── frontend/
-│   ├── public/                 # favicon 等静态资源
-│   ├── src/
-│   │   ├── api/client.ts       # API 封装
-│   │   ├── components/         # 各页面与聊天组件
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── index.html
-│   └── vite.config.ts
-├── scripts/
-│   ├── db_init.py              # 建表 + 种子数据
-│   ├── evaluate_forecast.py    # 预测模型评估（MAE/RMSE/MAPE）
-│   ├── zh_catalog.py           # 目录翻译为中文
-│   ├── zh_seed.py              # 种子数据中文化
-│   ├── insert_test_email.py    # 插入测试邮件
-│   └── deliver_mock_email.py   # 投递模拟邮件到 Mailpit
-├── seed-data/
-│   └── mock_orders.csv         # 历史订单种子数据
-├── orders/                     # 生成的采购订单 PDF（gitignored）
+│   ├── agents/        # 编排、提取、合规解释、建档与 PDF 逻辑
+│   ├── routers/       # 按业务域组织的 FastAPI 路由
+│   ├── services/      # graph 与 REST API 共用的业务服务
+│   ├── api.py         # FastAPI 应用装配
+│   ├── database.py    # SQLite 数据访问
+│   ├── email_service.py
+│   ├── forecast.py    # 历史需求趋势分析
+│   └── graph.py       # LangGraph 工作流
+├── frontend/          # React + TypeScript 前端
+├── scripts/           # 数据初始化、演示邮件与分析评估脚本
+├── seed-data/         # 示例历史订单
+├── tests/             # 后端测试
 ├── .env.example
 ├── requirements.txt
-├── quick_run.py                # Windows 一键启动
-└── README.md
+└── quick_run.py       # Windows 快速启动脚本
 ```
 
----
+## 测试与构建
 
-## 🔄 核心业务流
+```bash
+# 后端测试
+python -m pytest -q
 
+# 前端生产构建
+cd frontend
+npm run build
 ```
-邮件接入 (IMAP 同步)
-   → 邮件分析 (LLM 提取 → 物品/供应商匹配 → 存 email_analysis)
-   → 合规守门 (库存 / 预算 / 政策 → 通过/失败 + 解释)
-   → 创建订单 + 生成 PDF (orders 表 + orders/N.pdf)
-   → 需求预测 (Prophet 季节性分析 + LLM 综合报告)
-```
 
-也可以跳过邮件，直接在「新建订单」或聊天内嵌组件中手动下单。
+当前后端测试覆盖合规规则、邮件分析、数据库查询和订单状态流转。
 
----
+## 当前边界与路线图
 
-## 🔌 主要 API 端点
+当前的“需求分析”基于历史订单进行趋势估计和季节性汇总，不生成未来日期的采购量预测。邮件同步目前按最近 20 封处理，后台分析状态保存在单个后端进程内。
 
-| 方法 | 路径 | 说明 |
-|---|---|---|
-| POST | `/chat` | 编排器对话入口，返回响应 + 步骤 + UI 动作 |
-| POST | `/emails/analyze_all` | 批量分析所有未分析邮件 |
-| POST | `/procurement/{email_id}/compliance` | 对指定邮件运行合规检查 |
-| POST | `/procurement/{email_id}/order` | 创建订单并生成 PDF |
-| POST | `/orders/manual` | 手动下单（自动合规 + PDF） |
-| POST | `/orders/{order_id}/generate-pdf` | 重新生成订单 PDF |
-| POST | `/forecast/generate` | 生成需求预测报告 |
-| GET | `/database/tables/{table}` | 浏览 / 编辑数据库表 |
+后续计划：
 
-完整端点见 `backend/api.py`。
+- 增量同步邮件并支持分页加载
+- 增加面向未来日期的需求量预测与评估
+- 将长任务迁移到可恢复的后台任务队列
+- 补充 Docker 与 CI 配置
 
----
-
-## 🗺️ 路线图
-
-- [x] 多智能体编排与意图路由（LangGraph）
-- [x] 邮件分析、合规守门、采购订单 PDF、需求预测
-- [x] 品牌化与项目结构清理（智采 ZhiCai / v1.0.0）
-- [x] 商品目录泛化（通用采购/供应链：80 物料 + 30 供应商）
-- [x] 抽取公共「订单 + PDF」服务，消除重复逻辑
-- [x] CORS 收敛到环境变量配置
-- [x] 拆分单体 `api.py` 为模块化路由（9 个业务域 router）
-- [x] 统一邮件 / 合规 / PDF 的两条执行路径（graph vs REST，抽取共享服务）
-- [ ] 完善的 pytest 测试套件
-- [ ] Docker 一键部署
-
----
-
-## 📄 License
+## License
 
 [MIT](./LICENSE)

@@ -83,7 +83,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                 setChartData(typeof data.chart_data === 'string' ? JSON.parse(data.chart_data) : data.chart_data);
             }
         } catch (err: any) {
-            setError(err.message || "生成预测时发生意外错误。");
+            setError(err.message || "生成需求趋势报告时发生意外错误。");
         } finally {
             setIsGenerating(false);
         }
@@ -184,7 +184,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                         <div className="flex justify-end mt-4">
                             <span className="px-4 py-1.5 rounded-full bg-slate-50 dark:bg-white/5 border border-slate-200 dark:border-white/10 text-[0.65rem] font-black tracking-widest text-slate-500 uppercase flex items-center gap-2 shadow-sm">
                                 <Bot className="w-3.5 h-3.5 text-purple-500" />
-                                通过 {parsed.model_used} 同步
+                                由 {parsed.model_used} 整理
                             </span>
                         </div>
                     )}
@@ -196,7 +196,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                 <div className="bg-white dark:bg-gray-900 rounded-xl p-5 md:p-6 border border-slate-200 dark:border-white/5 shadow-md">
                     <div className="text-purple-500 text-xs mb-3 font-black uppercase tracking-widest">旧版报告格式</div>
                     <pre className="whitespace-pre-wrap font-sans text-slate-700 dark:text-slate-300 leading-relaxed text-sm">
-                        {report.startsWith('#') ? report : `# 执行预测\n\n${report}`}
+                        {report.startsWith('#') ? report : `# 需求趋势报告\n\n${report}`}
                     </pre>
                 </div>
             );
@@ -213,12 +213,12 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                             <TrendingUp className="h-5 w-5" />
                         </div>
                         <h1 className="text-2xl font-bold tracking-tight text-foreground">
-                            预测分析
+                            需求趋势分析
                         </h1>
                     </div>
                     <p className="text-muted-foreground max-w-2xl leading-relaxed text-sm">
-                        利用混合 AI 架构发掘季节性趋势。
-                        数学引擎分析历史记录，LLM 综合生成可执行的洞察。
+                        聚合历史采购记录，识别月度峰值与整体趋势。
+                        确定性分析负责计算，LLM 负责整理结构化洞察。
                     </p>
                 </div>
                 
@@ -284,7 +284,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                     {!report && !isGenerating && !error && (
                         <div className="h-[300px] flex flex-col items-center justify-center text-muted-foreground/60 gap-4">
                             <TrendingUp className="w-16 h-16 opacity-20" />
-                            <p className="text-lg font-medium">点击生成以构建预测报告。</p>
+                            <p className="text-lg font-medium">点击生成以构建需求趋势报告。</p>
                         </div>
                     )}
                     
@@ -295,8 +295,8 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                                 <Loader2 className="w-12 h-12 animate-spin text-purple-500 relative z-10" />
                             </div>
                             <div className="flex flex-col items-center gap-2">
-                                <p className="text-lg font-medium text-foreground">正在编排分析智能体</p>
-                                <p className="text-sm">正在获取 5000+ 历史记录 → 训练时间序列模型 → 提取季节性 → 调用 LLM</p>
+                                <p className="text-lg font-medium text-foreground">正在分析历史采购数据</p>
+                                <p className="text-sm">聚合历史订单 → 估计整体趋势 → 识别月度峰值 → 整理报告</p>
                             </div>
                         </div>
                     )}
@@ -314,7 +314,7 @@ export const ForecastPage: React.FC<ForecastPageProps> = ({
                                 <div className="mt-10 pt-10 border-t border-slate-200 dark:border-white/10 max-w-[800px] mx-auto w-full">
                                     <div className="flex flex-col mb-6 text-center md:text-left">
                                         <h3 className="text-xl font-bold bg-gradient-to-r from-purple-700 to-indigo-600 dark:from-purple-400 dark:to-blue-400 bg-clip-text text-transparent mb-2 tracking-tight">
-                                            交互式分析趋势
+                                            历史采购趋势
                                         </h3>
                                         <p className="text-slate-500 dark:text-slate-400 text-sm">在下方选择项目以切换曲线并聚焦关键组件。</p>
                                     </div>

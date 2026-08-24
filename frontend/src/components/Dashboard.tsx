@@ -52,7 +52,7 @@ const initialAgents: Agent[] = [
         icon: Mail,
         color: "from-sky-500 to-blue-600",
         description: "处理收发邮件通信，提取订单或供应商询价信息。",
-        thoughts: ["模型已加载。", "正在监控收件箱..."],
+        thoughts: ["模型配置已加载。", "等待处理邮件请求..."],
         capabilities: ["邮件解析", "供应商检索", "成本计算"],
         model: "加载中..."
     },
@@ -72,16 +72,16 @@ const initialAgents: Agent[] = [
     },
     {
         id: "agent-forecast-08",
-        key: "预测智能体",
+        key: "需求分析智能体",
         agentSettingsKey: "forecast",
-        name: "预测智能体",
-        role: "预测分析",
+        name: "需求分析智能体",
+        role: "历史趋势分析",
         status: "idle",
         icon: TrendingUp,
         color: "from-teal-500 to-emerald-600",
-        description: "分析历史数据，预测未来库存需求并建议补货时间。",
+        description: "聚合历史订单，估计整体采购趋势并识别月度需求峰值。",
         thoughts: ["数据模型已加载。", "准备分析。"],
-        capabilities: ["趋势预测", "需求预测"],
+        capabilities: ["趋势估计", "季节性汇总"],
         model: "加载中..."
     }
 ];
@@ -89,7 +89,6 @@ const initialAgents: Agent[] = [
 export function Dashboard({ messages, isLoading }: DashboardProps) {
     const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
     const [agents, setAgents] = useState<Agent[]>(initialAgents);
-    const [uptime, setUptime] = useState("0h 0m 0s");
 
     // Fetch models on mount
     useEffect(() => {
@@ -125,28 +124,7 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
         };
     }, []);
 
-    // Real-time uptime ticker
-    useEffect(() => {
-        const startTime = performance.timeOrigin; // Browser tab open time
-
-        const updateTicker = () => {
-            const now = performance.now() + performance.timeOrigin;
-            const diff = now - startTime;
-
-            const hours = Math.floor(diff / (1000 * 60 * 60));
-            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-
-            setUptime(`${hours}h ${minutes}m ${seconds}s`);
-        };
-
-        const interval = setInterval(updateTicker, 1000);
-        updateTicker(); // Initial call
-
-        return () => clearInterval(interval);
-    }, []);
-
-    // Update Agent Status and Thoughts based on live messages
+    // Update the displayed status and steps from the latest chat response
     useEffect(() => {
         if (messages.length === 0 && !isLoading) return;
 
@@ -173,7 +151,7 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                     }
                 }
 
-                // 2. Parse thoughts from steps
+                // 2. Parse the latest execution steps
                 // Filter steps that belong to this agent
                 const relevantSteps = steps.filter(step => step.includes(agent.key));
 
@@ -207,7 +185,7 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                         <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-cyan-500 bg-clip-text text-transparent mb-2">
                             智能体仪表盘
                         </h1>
-                        <p className="text-muted-foreground">活动智能体集群的实时遥测。</p>
+                        <p className="text-muted-foreground">展示当前请求状态与最近一次返回的处理步骤。</p>
                     </motion.div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
@@ -252,7 +230,7 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                                         )}
                                         
                                         <div className="flex items-center text-xs text-blue-600 dark:text-blue-400 font-medium group-hover:translate-x-1 transition-transform mt-auto">
-                                            查看日志 <ArrowRight className="w-3 h-3 ml-1" />
+                                            查看步骤 <ArrowRight className="w-3 h-3 ml-1" />
                                         </div>
                                     </CardContent>
 
@@ -341,10 +319,10 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
                                         </div>
                                     </div>
 
-                                    {/* Live Thoughts Terminal */}
+                                    {/* Recent execution steps */}
                                     <div>
                                         <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground mb-3 flex items-center gap-2">
-                                            <Terminal className="w-4 h-4" /> 实时日志
+                                            <Terminal className="w-4 h-4" /> 最近执行步骤
                                         </h3>
                                         <div className="bg-gray-50 dark:bg-black/50 rounded-lg border border-black/5 dark:border-white/10 p-4 font-mono text-sm shadow-inner min-h-[150px]">
                                             {selectedAgent.thoughts.map((thought, i) => (
@@ -371,7 +349,6 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
 
                                     <div className="text-xs text-muted-foreground pt-4 border-t border-black/5 dark:border-white/5 flex justify-between">
                                         <span>智能体 ID：<span className="font-mono text-blue-500 dark:text-blue-400/70">{selectedAgent.id}</span></span>
-                                        <span>运行时间：{uptime}</span>
                                     </div>
                                 </div>
                             </ScrollArea>
@@ -385,9 +362,9 @@ export function Dashboard({ messages, isLoading }: DashboardProps) {
 
 function StatusBadge({ status, size = "sm" }: { status: string, size?: "sm" | "lg" }) {
     const config = {
-        active: { color: "bg-green-500", label: "活跃", icon: CheckCircle2, text: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
-        thinking: { color: "bg-cyan-500", label: "思考中", icon: Activity, text: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-500/10" },
-        idle: { color: "bg-gray-400", label: "空闲", icon: Clock, text: "text-gray-500 dark:text-gray-400", bg: "bg-gray-500/10" },
+        active: { color: "bg-green-500", label: "最近参与", icon: CheckCircle2, text: "text-green-600 dark:text-green-400", bg: "bg-green-500/10" },
+        thinking: { color: "bg-cyan-500", label: "处理中", icon: Activity, text: "text-cyan-600 dark:text-cyan-400", bg: "bg-cyan-500/10" },
+        idle: { color: "bg-gray-400", label: "未参与", icon: Clock, text: "text-gray-500 dark:text-gray-400", bg: "bg-gray-500/10" },
         error: { color: "bg-red-500", label: "错误", icon: AlertCircle, text: "text-red-600 dark:text-red-400", bg: "bg-red-500/10" }
     }[status] || { color: "bg-gray-500", label: "未知", icon: Clock, text: "text-gray-500", bg: "bg-gray-500/10" };
 

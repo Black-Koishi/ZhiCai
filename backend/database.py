@@ -156,7 +156,7 @@ def get_email_attachments(email_id: str):
         return []
 
 def get_tables():
-    """Returns a list of all table names in the database."""
+    """返回数据库中的所有表名。"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'")
@@ -165,7 +165,7 @@ def get_tables():
     return tables
 
 def get_table_data(table_name: str):
-    """Returns all rows from a specified table."""
+    """返回指定表的所有行。"""
     conn = get_db_connection()
     c = conn.cursor()
     # Basic validation to prevent obvious SQLi. In a real app, use stricter allowlists.
@@ -178,10 +178,7 @@ def get_table_data(table_name: str):
     return [dict(row) for row in rows]
 
 def update_table_row(table_name: str, original_row: dict, updated_row: dict):
-    """
-    Dynamically updates a row. Uses the original_row to construct the WHERE clause
-    to ensure we update the exact row that was edited.
-    """
+    """根据原始行构造 WHERE 条件，动态更新被编辑的那一行。"""
     conn = get_db_connection()
     c = conn.cursor()
     
@@ -211,7 +208,7 @@ def update_table_row(table_name: str, original_row: dict, updated_row: dict):
              
     if not set_clauses or not where_clauses:
         raise ValueError("Empty update or condition")
-        
+    # 带 ? 的模板SQL
     query = f"UPDATE {table_name} SET {', '.join(set_clauses)} WHERE {' AND '.join(where_clauses)}"
     
     try:
@@ -225,7 +222,7 @@ def update_table_row(table_name: str, original_row: dict, updated_row: dict):
     return True
 
 def delete_table_data(table_name: str):
-    """Deletes all rows from a given table."""
+    """删除指定表的所有行。"""
     conn = get_db_connection()
     c = conn.cursor()
     
@@ -242,6 +239,7 @@ def delete_table_data(table_name: str):
 # --- Email Analysis Features ---
 
 def get_item_by_name(query: str):
+    """按名称/SKU 模糊匹配物料，返回第一条匹配记录。"""
     if not query:
         return None
         
@@ -293,6 +291,7 @@ def get_item_by_name(query: str):
     return dict(row) if row else None
 
 def get_vendor(vendor_id: str):
+    """按 ID 查询供应商。"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT * FROM vendors WHERE id = ?", (vendor_id,))
@@ -599,6 +598,7 @@ def increase_inventory(item_id: int, qty: int) -> None:
         conn.close()
 
 def get_unanalyzed_emails():
+    """返回收件箱中尚未分析的邮件（无 email_analysis 记录且未标记失败）。"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute('''
@@ -613,73 +613,78 @@ def get_unanalyzed_emails():
     conn.close()
     return [dict(row) for row in rows]
 
-def get_email_analysis(email_id: str):
-    conn = get_db_connection()
-    c = conn.cursor()
-    # Join with orders/emails to get pdf_path、订单状态与邮件状态（供采购组件恢复进度）
-    c.execute("""
-        SELECT ea.*, o.pdf_path, o.status AS order_status, e.analysis_status
-        FROM email_analysis ea
-        LEFT JOIN orders o ON ea.order_id = o.id
-        LEFT JOIN emails e ON ea.email_id = e.id
-        WHERE ea.email_id = ?
-    """, (email_id,))
-    row = c.fetchone()
-    
-    if not row:
-        conn.close()
-        return None
-        
-    analysis = dict(row)
-    
-    # ── Live Repair logic ───────────────────────────
-    # If the analysis exists but vendor/item mapping is missing (NULL or "N/A"), try to fix it now.
+def repair_analysis(analysis: dict) -> dict:
+    """修复分析记录中缺失的物品/供应商映射（Live Repair），并写回数据库。
+
+    当 vendor_name 为空或 "N/A" 且 item_name 存在时，用物料目录 + 默认供应商
+    补齐 item/vendor 字段并重算 total_cost。幂等：已修复的记录再次调用无副作用。
+    """
     vendor_null_or_na = analysis.get('vendor_name') is None or str(analysis.get('vendor_name')).upper() == "N/A"
-    
-    if vendor_null_or_na and analysis.get('item_name'):
-        try:
-            item_data = get_item_by_name(analysis['item_name'])
-            if item_data:
-                vendor_data = get_vendor(item_data['default_vendor_id'])
-                if vendor_data:
-                    # Update counts and costs
-                    quantity = analysis.get('item_quantity', 0)
-                    unit_price = item_data.get('unit_price', 0)
-                    total_cost = quantity * unit_price
-                    
-                    # Update the record in DB
-                    c.execute('''
-                        UPDATE email_analysis SET
-                            item_id = ?, item_name = ?, item_unit_price = ?,
-                            vendor_id = ?, vendor_name = ?, vendor_email = ?, vendor_phone = ?,
-                            total_cost = ?
-                        WHERE email_id = ?
-                    ''', (
-                        item_data.get('id'), item_data.get('name'), unit_price,
-                        vendor_data.get('id'), vendor_data.get('name'), vendor_data.get('email'), vendor_data.get('phone'),
-                        total_cost, email_id
-                    ))
-                    conn.commit()
-                    
-                    # Update the return object
-                    analysis.update({
-                        'item_id': item_data.get('id'),
-                        'item_name': item_data.get('name'),
-                        'item_unit_price': unit_price,
-                        'vendor_id': vendor_data.get('id'),
-                        'vendor_name': vendor_data.get('name'),
-                        'vendor_email': vendor_data.get('email'),
-                        'vendor_phone': vendor_data.get('phone'),
-                        'total_cost': total_cost
-                    })
-        except Exception as e:
-            print(f"Error during live repair of analysis '{email_id}': {e}")
-            
-    conn.close()
+    if not (vendor_null_or_na and analysis.get('item_name')):
+        return analysis
+
+    conn = get_db_connection()
+    try:
+        item_data = get_item_by_name(analysis['item_name'])
+        if item_data:
+            vendor_data = get_vendor(item_data['default_vendor_id'])
+            if vendor_data:
+                quantity = analysis.get('item_quantity', 0)
+                unit_price = item_data.get('unit_price', 0)
+                total_cost = quantity * unit_price
+
+                conn.execute("""
+                    UPDATE email_analysis SET
+                        item_id = ?, item_name = ?, item_unit_price = ?,
+                        vendor_id = ?, vendor_name = ?, vendor_email = ?, vendor_phone = ?,
+                        total_cost = ?
+                    WHERE email_id = ?
+                """, (
+                    item_data.get('id'), item_data.get('name'), unit_price,
+                    vendor_data.get('id'), vendor_data.get('name'), vendor_data.get('email'), vendor_data.get('phone'),
+                    total_cost, analysis.get('email_id')
+                ))
+                conn.commit()
+
+                analysis.update({
+                    'item_id': item_data.get('id'),
+                    'item_name': item_data.get('name'),
+                    'item_unit_price': unit_price,
+                    'vendor_id': vendor_data.get('id'),
+                    'vendor_name': vendor_data.get('name'),
+                    'vendor_email': vendor_data.get('email'),
+                    'vendor_phone': vendor_data.get('phone'),
+                    'total_cost': total_cost
+                })
+    except Exception as e:
+        print(f"Error during live repair of analysis '{analysis.get('email_id')}': {e}")
+    finally:
+        conn.close()
     return analysis
 
+
+def get_email_analysis(email_id: str):
+    """按邮件 ID 查询分析记录，并实时修复缺失的物品/供应商映射。"""
+    conn = get_db_connection()
+    try:
+        # Join with orders/emails to get pdf_path、订单状态与邮件状态（供采购组件恢复进度）
+        row = conn.execute("""
+            SELECT ea.*, o.pdf_path, o.status AS order_status, e.analysis_status
+            FROM email_analysis ea
+            LEFT JOIN orders o ON ea.order_id = o.id
+            LEFT JOIN emails e ON ea.email_id = e.id
+            WHERE ea.email_id = ?
+        """, (email_id,)).fetchone()
+    finally:
+        conn.close()
+
+    if not row:
+        return None
+
+    return repair_analysis(dict(row))
+
 def get_all_email_analyses():
-    """Returns all email_analysis rows for standalone compliance checking."""
+    """返回所有 email_analysis 记录（供独立合规检查用）。"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT * FROM email_analysis ORDER BY id DESC")
@@ -698,15 +703,13 @@ def get_email_analyses_by_status(status: str):
             "WHERE e.analysis_status = ? ORDER BY ea.id DESC",
             (status,),
         ).fetchall()
-        return [dict(r) for r in rows]
     finally:
         conn.close()
+    # 与 get_email_analysis 一致：同样执行 Live Repair，保证批量/单封两条路径输入一致
+    return [repair_analysis(dict(r)) for r in rows]
 
 def find_analysis_by_item_name(item_name: str):
-    """
-    Fuzzy-searches email_analysis by item_name.
-    Returns the most recent row.
-    """
+    """按物品名称模糊搜索 email_analysis，返回最新一条记录。"""
     conn = get_db_connection()
     c = conn.cursor()
     words = [w for w in item_name.strip().split() if len(w) > 2]
@@ -725,6 +728,7 @@ def find_analysis_by_item_name(item_name: str):
 
 
 def save_email_analysis(email_id: str, analysis_data: dict, item_data: dict, vendor_data: dict):
+    """保存邮件分析结果，并把邮件标记为「已分析」。"""
     conn = get_db_connection()
     c = conn.cursor()
     
@@ -795,7 +799,7 @@ def set_email_analysis_status(email_id: str, status: str, error: str = None) -> 
 # --- Order Management ---
 
 def create_order(item_id: int, vendor_id: int, qty: int, amount: float) -> int:
-    """Inserts an order. Returns the new order id."""
+    """插入订单，返回新订单 id。"""
     conn = get_db_connection()
     c = conn.cursor()
     try:
@@ -810,7 +814,7 @@ def create_order(item_id: int, vendor_id: int, qty: int, amount: float) -> int:
 
 
 def get_orders():
-    """Returns all orders joined with item and vendor info."""
+    """返回所有订单（join 物品与供应商信息）。"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("""
@@ -829,7 +833,7 @@ def get_orders():
 def get_orders_paginated(page: int = 1, per_page: int = 20, search: str = None,
                          status: str = None, min_amount: float = None, max_amount: float = None,
                          date_from: str = None, date_to: str = None):
-    """Returns paginated orders with total count, supporting search + filters."""
+    """分页返回订单，支持搜索、状态、金额与日期范围筛选。"""
     conn = get_db_connection()
     c = conn.cursor()
 
@@ -893,7 +897,7 @@ def get_orders_paginated(page: int = 1, per_page: int = 20, search: str = None,
 
 
 def get_orders_summary():
-    """Returns aggregate stats for the orders header (仅统计已完成订单的金额与数量)。"""
+    """返回订单头部聚合统计（仅统计已完成订单的金额与数量）。"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("""
@@ -909,7 +913,7 @@ def get_orders_summary():
 
 
 def get_order_by_id(order_id: int):
-    """Returns a single order with full item and vendor details."""
+    """按 ID 返回单个订单（含物品与供应商详情）。"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("""
@@ -927,6 +931,7 @@ def get_order_by_id(order_id: int):
 # --- Forecast Management ---
 
 def save_forecast(stats_json: str, markdown: str, chart_data: str):
+    """保存一条预测记录。"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute(
@@ -937,6 +942,7 @@ def save_forecast(stats_json: str, markdown: str, chart_data: str):
     conn.close()
 
 def get_latest_forecast():
+    """返回最新一条预测记录。"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT * FROM forecasts ORDER BY id DESC LIMIT 1")
@@ -945,6 +951,7 @@ def get_latest_forecast():
     return dict(row) if row else None
 
 def get_forecast_history():
+    """返回预测历史（仅 id 与创建时间）。"""
     conn = get_db_connection()
     c = conn.cursor()
     # Fetch all, but we don't need to load huge chart data, just id and date.
@@ -954,6 +961,7 @@ def get_forecast_history():
     return [dict(row) for row in rows]
 
 def get_forecast_by_id(forecast_id: int):
+    """按 ID 返回单条预测记录。"""
     conn = get_db_connection()
     c = conn.cursor()
     c.execute("SELECT * FROM forecasts WHERE id = ?", (forecast_id,))

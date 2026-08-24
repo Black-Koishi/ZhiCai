@@ -38,6 +38,7 @@ app.mount("/static/orders", StaticFiles(directory=str(ORDERS_DIR)), name="orders
 # 启动时初始化数据库
 @app.on_event("startup")
 def on_startup():
+    """应用启动时初始化数据库（轻量迁移）。"""
     init_db()
 
 

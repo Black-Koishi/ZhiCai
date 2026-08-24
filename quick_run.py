@@ -4,7 +4,7 @@ import subprocess
 import platform
 
 def main():
-    print("🤖 Starting Multi-Agent System...")
+    print("🤖 正在启动智采 ZhiCai...")
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
     frontend_dir = os.path.join(base_dir, "frontend")

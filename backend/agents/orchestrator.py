@@ -11,7 +11,7 @@ from backend.agents.models import OrchestrationResponse
 
 def orchestrator_router(input_str: str) -> OrchestrationResponse:
     """
-    协调器：对用户输入信息进行分析，以决定路由方式和界面操作。
+    编排器：对用户输入信息进行分析，以决定路由方式和界面操作。
     通过使用原生 JSON Scheam 简化了对 结构化输出 的可靠性保障。
     """
     prompt = f"""你是一个 AI 编排器。
@@ -30,7 +30,7 @@ def orchestrator_router(input_str: str) -> OrchestrationResponse:
     - 如果用户想运行合规检查、审查政策或批量审核，decision 用 'compliance'。
     - 如果用户想生成、下载或创建采购订单或 PDF 文档，decision 用 'pdf'。
     - 如果用户想新增、录入、入驻或添加供应商，decision 用 'supplier'。
-    - 如果用户想生成需求预测、预测报告或趋势分析，decision 用 'forecast'。
+    - 如果用户想生成需求趋势报告、分析历史需求或查看趋势，decision 用 'forecast'。
     - 如果无法明确归入以上，decision 用 'unknown'。
 
     详细规则：
@@ -63,7 +63,7 @@ def orchestrator_router(input_str: str) -> OrchestrationResponse:
     - 用户："订购 10 个锂电池"：{{"decision": "unknown", "reasoning": "按物品名称手动下单", "chat_response": "我可以帮你处理这个订单，请查看下方详情。", "ui_actions": [{{"action_type": "open_inline_procurement", "params": {{"item_name": "锂电池", "quantity": 10, "mode": "manual"}}}}]}}
     - 用户："显示高优先级邮件"：{{"decision": "unknown", "reasoning": "导航/筛选请求", "chat_response": null, "ui_actions": [{{"action_type": "redirect", "params": {{"view": "emails"}}}}, {{"action_type": "set_filter", "params": {{"status": "high"}}}}]}}
     - 用户："展示未分析邮件"：{{"decision": "unknown", "reasoning": "导航/筛选请求", "chat_response": null, "ui_actions": [{{"action_type": "redirect", "params": {{"view": "emails"}}}}, {{"action_type": "set_filter", "params": {{"status": "unanalyzed"}}}}]}}
-    - 用户："生成预测报告"：{{"decision": "forecast", "reasoning": "用户想生成需求预测", "chat_response": "正在后台生成预测报告...", "ui_actions": []}}
+    - 用户："生成趋势报告"：{{"decision": "forecast", "reasoning": "用户想分析历史采购需求", "chat_response": "正在后台生成需求趋势报告...", "ui_actions": []}}
     - 用户："打开设置"：{{"decision": "unknown", "reasoning": "导航到设置", "chat_response": null, "ui_actions": [{{"action_type": "redirect", "params": {{"view": "settings"}}}}]}}
     - 用户："下单"：{{"decision": "unknown", "reasoning": "新建订单", "chat_response": null, "ui_actions": [{{"action_type": "redirect", "params": {{"view": "new_order"}}}}]}}
     - 用户："新增供应商：顶点工业供应，主营金属材料，邮箱 sales@vertex.com，有 ISO 认证"：{{"decision": "supplier", "reasoning": "供应商入驻", "chat_response": null, "ui_actions": []}}

@@ -223,7 +223,7 @@ export function NewOrderPage() {
                         新建订单
                     </h1>
                     <p className="text-muted-foreground max-w-lg mx-auto">
-                        搜索商品目录。
+                        搜索物料目录。
                     </p>
                 </div>
 

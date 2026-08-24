@@ -35,7 +35,7 @@ is_procurement_request：判断该邮件是否为真实的采购/询价需求。
             HumanMessage(content=body)
         ])
         content = response.content.strip()
-        # # 如果存在 Markdown 代码块则删除它们
+        # 如果存在 Markdown 代码块则删除它们
         if content.startswith("```json"):
              content = content[7:-3]
         elif content.startswith("```"):

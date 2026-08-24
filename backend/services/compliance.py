@@ -3,7 +3,7 @@
 供 LangGraph 节点与 REST 端点共用，统一「合规 = 检查 + 解释」的行为。
 """
 from backend.agents import run_gatekeeper_checks, explain_compliance_result
-from backend.database import get_db_connection
+from backend.database import get_db_connection, repair_analysis, set_email_analysis_status
 
 
 def format_review(review: dict) -> str:
@@ -33,6 +33,22 @@ def run_compliance(analysis: dict) -> dict:
     }
 
 
+def run_compliance_and_record(email_id: str, analysis: dict) -> dict:
+    """对一封邮件的分析执行完整合规流程并落库：修复 → 检查 → 存解释 → 更新状态 → 失败通知。
+
+    批量合规节点、单邮件合规 API、按物品名合规 API 共用本函数，
+    保证同一封邮件在任何入口下的输入（含 Live Repair）、检查、状态流转与通知完全一致。
+    返回 run_compliance 的结果 dict（passed/failures/warnings/review/explanation）。
+    """
+    analysis = repair_analysis(analysis)
+    result = run_compliance(analysis)
+    save_compliance_explanation(email_id, result["explanation"])
+    set_email_analysis_status(email_id, "pending_review" if result["passed"] else "failed_compliance")
+    if not result["passed"]:
+        send_cancel_notification(email_id, result["explanation"])
+    return result
+
+
 def save_compliance_explanation(email_id: str, explanation: str) -> None:
     """把合规解释写回 email_analysis 表。"""
     conn = get_db_connection()
@@ -47,6 +63,7 @@ def save_compliance_explanation(email_id: str, explanation: str) -> None:
 
 
 def _email_sender(email_id: str):
+    """查询某封邮件的发件人地址。"""
     conn = get_db_connection()
     try:
         row = conn.execute("SELECT sender FROM emails WHERE id = ?", (email_id,)).fetchone()

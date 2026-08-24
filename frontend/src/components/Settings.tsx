@@ -48,7 +48,7 @@ export function Settings({ agentModels, agentProviders, availableModels, emailCo
         orchestrator: "编排器智能体",
         email: "邮件提取智能体",
         compliance: "合规智能体",
-        forecast: "预测智能体"
+        forecast: "需求分析智能体"
     }
 
     useEffect(() => {
@@ -394,7 +394,7 @@ export function Settings({ agentModels, agentProviders, availableModels, emailCo
                 <CardContent>
                     <div className="text-sm text-muted-foreground">
                         <p>智采 ZhiCai</p>
-                        <p>v1.0.0</p>
+                        <p>本地优先的 AI 采购管理平台</p>
                     </div>
                 </CardContent>
             </Card>

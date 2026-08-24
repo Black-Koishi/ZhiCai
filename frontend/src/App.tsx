@@ -175,7 +175,7 @@ function App() {
                 })
                 .finally(() => setIsLoading(false));
         } else if (action.action_type === "start_forecast") {
-            // 编排器触发了后台预测生成：进入生成状态并开始轮询
+            // 编排器触发了后台趋势分析：进入生成状态并开始轮询
             setIsGeneratingForecast(true);
             setForecastError(null);
             setForecastPolling(true);
@@ -196,7 +196,7 @@ function App() {
         }
     }
 
-    // 后台预测生成完成后：刷新状态、拉取最新结果，并在聊天中提示可跳转
+    // 后台趋势分析完成后：刷新状态、拉取最新结果，并在聊天中提示可跳转
     useEffect(() => {
         if (!forecastPolling) return;
         const interval = setInterval(async () => {
@@ -216,15 +216,15 @@ function App() {
                     }
                     setMessages(prev => [...prev, {
                         role: "assistant",
-                        content: "✅ 预测报告已生成，点击下方按钮查看预测分析。",
-                        ui_actions: [{ action_type: "navigate", params: { view: "forecast", label: "查看预测分析" } }]
+                        content: "✅ 需求趋势报告已生成，点击下方按钮查看分析结果。",
+                        ui_actions: [{ action_type: "navigate", params: { view: "forecast", label: "查看趋势分析" } }]
                     }]);
                 } else if (state === "error") {
                     clearInterval(interval);
                     setForecastPolling(false);
                     setIsGeneratingForecast(false);
-                    setForecastError(res?.data?.message || "预测生成失败");
-                    setMessages(prev => [...prev, { role: "assistant", content: `❌ 预测生成失败：${res?.data?.message || "未知错误"}` }]);
+                    setForecastError(res?.data?.message || "需求趋势报告生成失败");
+                    setMessages(prev => [...prev, { role: "assistant", content: `❌ 需求趋势报告生成失败：${res?.data?.message || "未知错误"}` }]);
                 }
             } catch {
                 // 轮询失败时静默忽略，等待下一轮
@@ -272,7 +272,7 @@ function App() {
                                 {activeView === 'dashboard' && '智能体仪表盘'}
                                 {activeView === 'orders' && '采购管理'}
                                 {activeView === 'settings' && '设置'}
-                                {activeView === 'forecast' && '预测分析'}
+                                {activeView === 'forecast' && '需求趋势分析'}
                             </h1>
                         )}
                     </div>

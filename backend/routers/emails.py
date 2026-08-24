@@ -59,6 +59,7 @@ async def unanalyzed_count():
 
 @router.get("/emails/{folder}", response_model=list[EmailItem])
 async def get_emails(folder: str, limit: int = 20):
+    """分页返回某文件夹的邮件列表。"""
     try:
         return db_get_emails(folder, limit)
     except Exception as e:
@@ -88,6 +89,7 @@ async def download_email_attachment(email_id: str, storage_key: str):
 
 @router.post("/emails/sync")
 async def sync_emails(folder: str = "INBOX"):
+    """从邮箱同步邮件到本地库。"""
     try:
         emails = await asyncio.to_thread(EmailService().fetch_emails, folder, 20)
         return {"status": "success", "count": len(emails), "message": f"已从 {folder} 同步 {len(emails)} 封邮件"}
@@ -97,6 +99,7 @@ async def sync_emails(folder: str = "INBOX"):
 
 @router.post("/emails/send")
 async def send_email_endpoint(request: SendEmailRequest):
+    """发送一封邮件。"""
     success = await asyncio.to_thread(EmailService().send_email, request.to_email, request.subject, request.body)
     if success:
         return {"status": "success", "message": "邮件发送成功"}
@@ -105,6 +108,7 @@ async def send_email_endpoint(request: SendEmailRequest):
 
 @router.post("/emails/{email_id}/analyze")
 async def analyze_single_email(email_id: str):
+    """分析单封邮件并保存结果。"""
     try:
         conn = get_db_connection()
         c = conn.cursor()
@@ -131,6 +135,7 @@ async def analyze_single_email(email_id: str):
 
 @router.post("/emails/analyze_all")
 async def analyze_all_emails():
+    """批量分析所有未分析邮件。"""
     try:
         unanalyzed = get_unanalyzed_emails()
         results = []
@@ -162,6 +167,7 @@ async def ignore_email_endpoint(email_id: str, request: IgnoreEmailRequest):
 
 @router.get("/emails/{email_id}/analysis")
 async def get_email_analysis_endpoint(email_id: str):
+    """返回某封邮件的分析记录。"""
     try:
         data = get_email_analysis(email_id)
         if data:

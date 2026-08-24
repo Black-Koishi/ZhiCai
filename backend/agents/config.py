@@ -43,10 +43,12 @@ def get_provider(agent_name: str) -> str:
 
 
 def get_cloud_base_url() -> str:
+    """读取云端（OpenAI 兼容）API 的 base_url。"""
     return os.getenv("CLOUD_BASE_URL", "")
 
 
 def get_cloud_api_key() -> str:
+    """读取云端（OpenAI 兼容）API 的 api_key。"""
     return os.getenv("CLOUD_API_KEY", "")
 
 
@@ -129,6 +131,14 @@ def list_ollama_models() -> list[str]:
 
 
 # 兼容旧调用：各智能体的 LLM 快捷访问器
-def get_router_llm(): return get_llm("orchestrator", format="json")
-def get_email_analyzer_llm(): return get_llm("email")
-def get_compliance_llm(): return get_llm("compliance")
+def get_router_llm():
+    """获取编排器 LLM 实例（JSON 输出）。"""
+    return get_llm("orchestrator", format="json")
+
+def get_email_analyzer_llm():
+    """获取邮件分析 LLM 实例。"""
+    return get_llm("email")
+
+def get_compliance_llm():
+    """获取合规检查 LLM 实例。"""
+    return get_llm("compliance")

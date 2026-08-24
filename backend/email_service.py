@@ -53,6 +53,7 @@ def _decode_body_payload(payload, charset):
 
 class EmailService:
     def __init__(self):
+        """初始化邮箱配置：每次实例化动态读取环境变量。"""
         # 每次实例化时动态读取配置，保存后无需重启即可生效
         self.email_user = os.getenv("EMAIL_USER")
         self.email_pass = os.getenv("EMAIL_PASS")
@@ -76,6 +77,7 @@ class EmailService:
 
             # 不同邮箱对「已发送/已删除/草稿」文件夹命名不同，先动态发现，再回退到常见名称
             def _find_folder(keywords):
+                """在 IMAP 文件夹列表中动态查找匹配关键词的文件夹名。"""
                 try:
                     status, folders = mail.list()
                     if status == "OK":

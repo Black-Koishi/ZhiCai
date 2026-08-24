@@ -10,8 +10,8 @@ from backend.agents.config import get_compliance_llm
 
 def run_gatekeeper_checks(analysis: dict) -> dict:
     """
-    基于大模型的对库存, 预算, 重复订单, 仓库容量, 政策的合规性检查。
-    Returns：{ 'passed'： bool， 'failures': [str], 'warnings'： [str] }
+    使用确定性规则检查库存、预算、重复订单、仓库容量与采购政策。
+    返回：{ 'passed': bool, 'failures': [str], 'warnings': [str] }
     """
     from backend.database import get_db_connection
 
@@ -121,6 +121,7 @@ def explain_compliance_result(analysis: dict, gate_result: dict) -> dict:
     catalog_line = f"单价（目录价）：${catalog:,.2f}" if catalog else "单价（目录价）：无"
 
     def fallback_risk() -> str:
+        """LLM 不可用时按失败/提醒项回退判定风险等级。"""
         if failures:
             return "高"
         if warnings:
@@ -128,6 +129,7 @@ def explain_compliance_result(analysis: dict, gate_result: dict) -> dict:
         return "低"
 
     def fallback_review() -> dict:
+        """LLM 不可用时回退构造结构化评审结果。"""
         return {
             "risk_level": fallback_risk(),
             "risk_points": (failures + warnings)[:4],

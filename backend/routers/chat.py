@@ -26,6 +26,7 @@ class ChatResponse(BaseModel):
 
 @router.post("/chat", response_model=ChatResponse)
 async def chat_endpoint(request: ChatRequest):
+    """编排器对话入口：运行 LangGraph 工作流并返回回复、步骤与 UI 动作。"""
     initial_state = {
         "input_text": request.message,
         "steps": [],
@@ -56,4 +57,5 @@ async def chat_endpoint(request: ChatRequest):
 # 暂时没用
 @router.get("/health")
 async def health_check():
+    """健康检查接口。"""
     return {"status": "ok"}
