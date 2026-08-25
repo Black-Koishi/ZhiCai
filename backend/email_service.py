@@ -17,6 +17,39 @@ from backend.attachments import save as save_attachment
 load_dotenv()
 
 
+NETEASE_IMAP_SERVERS = {"imap.163.com", "imap.126.com", "imap.yeah.net"}
+
+
+class EmailSyncError(RuntimeError):
+    """邮箱服务器连接、认证或文件夹访问失败。"""
+
+
+def _imap_response_text(data):
+    """将 IMAP 响应安全地整理为可展示文本。"""
+    if not data:
+        return "未知原因"
+    parts = []
+    for value in data if isinstance(data, (list, tuple)) else [data]:
+        if isinstance(value, bytes):
+            parts.append(value.decode("utf-8", errors="replace"))
+        elif value is not None:
+            parts.append(str(value))
+    return " ".join(parts) or "未知原因"
+
+
+def _send_imap_client_id(mail, support_email):
+    """向网易邮箱发送 RFC 2971 ID，避免被判定为 Unsafe Login。"""
+    imaplib.Commands.setdefault("ID", ("AUTH",))
+    safe_email = (support_email or "").replace("\\", "\\\\").replace('"', '\\"')
+    payload = (
+        '("name" "ZhiCai" "version" "1.0" "vendor" "ZhiCai" '
+        f'"support-email" "{safe_email}")'
+    )
+    status, data = mail._simple_command("ID", payload)
+    if status != "OK":
+        raise EmailSyncError(f"邮箱服务器拒绝客户端标识：{_imap_response_text(data)}")
+
+
 def _decode_mime_header(value):
     """解码 MIME 编码的邮件头（如 =?gb18030?B?...?=）。"""
     if not value:
@@ -74,10 +107,12 @@ class EmailService:
         try:
             mail = imaplib.IMAP4_SSL(self.imap_server, self.imap_port)
             mail.login(self.email_user, self.email_pass)
+            if self.imap_server.lower() in NETEASE_IMAP_SERVERS:
+                _send_imap_client_id(mail, self.email_user)
 
             # 不同邮箱对「已发送/已删除/草稿」文件夹命名不同，先动态发现，再回退到常见名称
-            def _find_folder(keywords):
-                """在 IMAP 文件夹列表中动态查找匹配关键词的文件夹名。"""
+            def _find_folder(keywords, special_use_flag=None):
+                """按标准用途标记或名称关键词查找 IMAP 文件夹。"""
                 try:
                     status, folders = mail.list()
                     if status == "OK":
@@ -86,7 +121,17 @@ class EmailService:
                             names = re.findall(r'"([^"]*)"', text)
                             if names:
                                 name = names[-1]
-                                if any(k in name.lower() for k in keywords):
+                                flags_match = re.match(r"^\(([^)]*)\)", text)
+                                flags = {
+                                    flag.lower()
+                                    for flag in flags_match.group(1).split()
+                                } if flags_match else set()
+                                matches_special_use = (
+                                    special_use_flag is not None
+                                    and special_use_flag.lower() in flags
+                                )
+                                matches_name = any(k in name.lower() for k in keywords)
+                                if matches_special_use or matches_name:
                                     # 含空格等特殊字符的文件夹名需加双引号
                                     return f'"{name}"'
                 except Exception:
@@ -95,18 +140,19 @@ class EmailService:
 
             key = folder.lower()
             if key == "sent":
-                imap_folder = _find_folder(["sent"]) or '"[Gmail]/Sent Mail"'
+                imap_folder = _find_folder(["sent"], "\\sent") or '"[Gmail]/Sent Mail"'
             elif key == "trash":
-                imap_folder = _find_folder(["trash", "deleted"]) or '"[Gmail]/Trash"'
+                imap_folder = _find_folder(["trash", "deleted"], "\\trash") or '"[Gmail]/Trash"'
             elif key == "drafts":
-                imap_folder = _find_folder(["draft"]) or '"[Gmail]/Drafts"'
+                imap_folder = _find_folder(["draft"], "\\drafts") or '"[Gmail]/Drafts"'
             else:
                 # inbox 等标准文件夹：INBOX 大小写不敏感，直接按原名选择
                 imap_folder = folder
 
-            status, _ = mail.select(imap_folder)
+            status, select_data = mail.select(imap_folder)
             if status != "OK":
-                return []
+                reason = _imap_response_text(select_data)
+                raise EmailSyncError(f"邮箱服务器拒绝访问文件夹 {folder}：{reason}")
 
             status, data = mail.uid("SEARCH", None, "ALL")
             mail_ids = data[0].split()
@@ -164,9 +210,10 @@ class EmailService:
             # 保存邮件到数据库
             save_emails(email_list)
             return email_list
+        except EmailSyncError:
+            raise
         except Exception as e:
-            print(f"IMAP Error: {e}")
-            return []
+            raise EmailSyncError(f"邮箱连接或认证失败：{e}") from e
 
     def _mailpit_fetch(self, folder="inbox", limit=20):
         """Mailpit 模式：通过 HTTP API 读取捕获的邮件。"""

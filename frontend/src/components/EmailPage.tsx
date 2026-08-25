@@ -39,6 +39,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { fetchEmails, syncEmails, EmailItem, analyzeEmail, analyzeAllEmails, fetchUnanalyzedCount, getEmailAnalysis, ignoreEmail, API_BASE_URL } from "@/api/client";
 import { Message } from "@/components/ChatInterface";
+import { formatEmailLabel } from "@/components/emailDisplay";
 
 function formatEmailDate(dateStr: string): string {
     if (!dateStr) return "";
@@ -166,19 +167,19 @@ export function EmailPage({
     // The procurement flow is now handled directly within the ChatInterface 
     // using the ChatProcurementWidget.
 
-    const openProcurementFor = (emailId: string) => {
+    const openProcurementFor = (email: EmailItem) => {
         if (!setMessages) return;
 
         // Simulate a message from the Orchestrator with the procurement widget
         const newMsg: Message = {
             role: "assistant",
-            content: `我可以帮你处理邮件 ${emailId} 的采购订单。请查看下方详情以继续。`,
+            content: `我可以帮你处理邮件${formatEmailLabel(email)}的采购订单。请查看下方详情以继续。`,
             ui_actions: [
                 {
                     action_type: "open_inline_procurement",
                     params: {
                         mode: "email",
-                        email_id: emailId
+                        email_id: email.id
                     }
                 }
             ]
@@ -189,7 +190,7 @@ export function EmailPage({
 
     const handleStartProcurement = () => {
         if (!selectedEmail) return;
-        openProcurementFor(selectedEmail.id);
+        openProcurementFor(selectedEmail);
     };
 
     // Fetch Emails
@@ -211,8 +212,8 @@ export function EmailPage({
         try {
             await syncEmails(folder);
             await loadEmails();
-        } catch (error) {
-            alert("邮件同步失败");
+        } catch (error: unknown) {
+            alert(error instanceof Error ? error.message : "邮件同步失败");
         } finally {
             setIsSyncing(false);
         }
@@ -259,12 +260,14 @@ export function EmailPage({
         }
     }, [selectedEmail]);
 
-    const handleAnalyzeEmail = async (emailId: string, e: React.MouseEvent) => {
+    const handleAnalyzeEmail = async (email: EmailItem, e: React.MouseEvent) => {
         e.stopPropagation(); // Prevent opening email detail
+        const emailId = email.id;
+        const emailLabel = formatEmailLabel(email);
         setAnalyzingEmailId(emailId);
         // 立即在 Agent 中提示「开始分析」
         if (setMessages) {
-            setMessages(prev => [...prev, { role: "assistant", content: `🔍 邮件智能体：正在分析邮件 ${emailId}...` }]);
+            setMessages(prev => [...prev, { role: "assistant", content: `🔍 邮件智能体：正在分析邮件${emailLabel}...` }]);
         }
         try {
             const res = await analyzeEmail(emailId);
@@ -273,9 +276,17 @@ export function EmailPage({
             if (setMessages && res.step) {
                 const newMsg: Message = {
                     role: "assistant",
-                    content: `✅ 邮件 ${emailId} 分析完成。`,
+                    content: `✅ 邮件${emailLabel}分析完成。`,
                     steps: ["邮件智能体：正在分析收件箱...", res.step, "邮件智能体：已处理 1 封邮件。"],
-                    ui_actions: [{ action_type: "start_procurement", params: { email_id: emailId, label: "进入合规检查" } }]
+                    ui_actions: [{
+                        action_type: "start_procurement",
+                        params: {
+                            email_id: emailId,
+                            email_sender: email.sender,
+                            email_subject: email.subject,
+                            label: "进入合规检查",
+                        },
+                    }]
                 };
                 setMessages(prev => [...prev, newMsg]);
             }
@@ -295,7 +306,7 @@ export function EmailPage({
     const handleReview = (email: EmailItem, e: React.MouseEvent) => {
         e.stopPropagation();
         // 与详情页「开始采购」同一逻辑：打开内联采购组件（合规 → 下单 → 发邮件）
-        openProcurementFor(email.id);
+        openProcurementFor(email);
     };
 
     const handleIgnore = (email: EmailItem, e: React.MouseEvent) => {
@@ -311,7 +322,10 @@ export function EmailPage({
             await ignoreEmail(ignoreTarget.id, ignoreReason.trim());
             await loadEmails(false);
             if (setMessages) {
-                setMessages(prev => [...prev, { role: "assistant", content: `已忽略邮件「${ignoreTarget.id}」。` }]);
+                setMessages(prev => [...prev, {
+                    role: "assistant",
+                    content: `已忽略邮件${formatEmailLabel(ignoreTarget)}。`,
+                }]);
             }
             setIgnoreTarget(null);
         } catch (error) {
@@ -340,11 +354,13 @@ export function EmailPage({
                 const successCount = results.filter((r: any) => r.status === "success").length;
                 const failCount = results.filter((r: any) => r.status === "error").length;
                 const steps = ["邮件智能体：正在分析收件箱..."];
+                const labelsById = new Map(emails.map(email => [email.id, formatEmailLabel(email)]));
                 results.forEach((r: any) => {
+                    const emailLabel = labelsById.get(r.email_id) || "该邮件";
                     if (r.status === "success") {
-                        steps.push(r.step || `✅ 已分析邮件 ${r.email_id}`);
+                        steps.push(r.step || `✅ 已分析邮件${emailLabel}`);
                     } else {
-                        steps.push(`❌ 邮件 ${r.email_id}：${r.message || "分析失败"}`);
+                        steps.push(r.step || `❌ ${emailLabel}分析失败：${r.message || "未知错误"}`);
                     }
                 });
                 steps.push(`邮件智能体：分析完成 — 成功 ${successCount} 封，失败 ${failCount} 封。`);
@@ -755,7 +771,7 @@ export function EmailPage({
                                                     variant="ghost"
                                                     size="icon"
                                                     className="h-8 w-8 text-purple-500 hover:bg-purple-500/20 hover:text-purple-600"
-                                                    onClick={(e) => handleAnalyzeEmail(email.id, e)}
+                                                    onClick={(e) => handleAnalyzeEmail(email, e)}
                                                     disabled={analyzingEmailId === email.id}
                                                     title="分析邮件"
                                                 >

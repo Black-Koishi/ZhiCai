@@ -6,6 +6,7 @@ from backend.services.emails import analyze_email
 from backend.services.compliance import run_compliance_and_record
 from backend.services.orders import generate_and_store_pdf
 from backend.services.suppliers import onboard_supplier_from_text
+from backend.email_display import format_email_label
 
 # 1. 定义 State, 用于存储智能体的状态
 class AgentState(TypedDict):
@@ -63,19 +64,20 @@ def agent_email_node(state: AgentState):
 
     for email in unanalyzed:
         email_id = email["id"]
+        email_label = format_email_label(email)
         try:
             saved = analyze_email(email_id, email["body"])
             if not saved:
-                steps.append(f"邮件智能体：无法从 '{email_id}' 分析完整需求，已跳过。")
+                steps.append(f"邮件智能体：无法从邮件{email_label}分析完整需求，已跳过。")
                 continue
             steps.append(
-                f"📧 邮件 '{email_id}'：'{saved.get('item_name', '?')}' "
+                f"📧 邮件{email_label}：'{saved.get('item_name', '?')}' "
                 f"x{saved.get('item_quantity', '?')} — 优先级：{saved.get('priority', '?')}"
             )
             analyzed_count += 1
         except Exception as e:
             set_email_analysis_status(email_id, "failed", str(e))
-            steps.append(f"处理邮件 '{email_id}' 时出错：{str(e)}")
+            steps.append(f"处理邮件{email_label}时出错：{str(e)}")
 
     summary = f"流水线完成 — 已保存提取结果：{analyzed_count} 条。"
     steps.append(summary)
@@ -109,6 +111,7 @@ def compliance_node(state: AgentState):
     for analysis in analyses:
         item_name = analysis.get("item_name", "未知")
         email_id = analysis.get("email_id", "?")
+        email_label = format_email_label(analysis)
         try:
             result = run_compliance_and_record(email_id, analysis)
             gatekeeper_results.append({
@@ -124,7 +127,7 @@ def compliance_node(state: AgentState):
                 failed_count += 1
                 steps.append(f"❌ 未通过  [{item_name}]（已通知发件人）：{result['explanation']}")
         except Exception as e:
-            steps.append(f"检查 '{item_name}'（邮件 {email_id}）时出错：{str(e)}")
+            steps.append(f"检查 '{item_name}'（邮件{email_label}）时出错：{str(e)}")
 
     summary = f"合规检查完成 — 共检查 {len(analyses)} 项，✅ {passed_count} 项通过（待审核），❌ {failed_count} 项未通过。"
     steps.append(summary)

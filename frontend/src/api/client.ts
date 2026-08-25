@@ -79,7 +79,8 @@ export async function syncEmails(folder: string): Promise<{ count: number; messa
         method: "POST",
     });
     if (!response.ok) {
-        throw new Error(`Failed to sync emails: ${response.statusText}`);
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(getApiErrorMessage(errorData, `邮件同步失败：${response.statusText}`));
     }
     return response.json();
 }

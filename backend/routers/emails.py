@@ -6,7 +6,8 @@ from fastapi.responses import Response
 from pydantic import BaseModel
 
 from backend.attachments import read as read_attachment
-from backend.email_service import EmailService
+from backend.email_service import EmailService, EmailSyncError
+from backend.email_display import format_email_label
 from backend.database import (
     get_emails as db_get_emails,
     get_email_analysis,
@@ -93,6 +94,8 @@ async def sync_emails(folder: str = "INBOX"):
     try:
         emails = await asyncio.to_thread(EmailService().fetch_emails, folder, 20)
         return {"status": "success", "count": len(emails), "message": f"已从 {folder} 同步 {len(emails)} 封邮件"}
+    except EmailSyncError as e:
+        raise HTTPException(status_code=502, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -112,7 +115,7 @@ async def analyze_single_email(email_id: str):
     try:
         conn = get_db_connection()
         c = conn.cursor()
-        c.execute("SELECT body FROM emails WHERE id = ?", (email_id,))
+        c.execute("SELECT body, subject, sender FROM emails WHERE id = ?", (email_id,))
         row = c.fetchone()
         conn.close()
 
@@ -120,12 +123,13 @@ async def analyze_single_email(email_id: str):
             raise HTTPException(status_code=404, detail="邮件未找到")
 
         body = row["body"]
+        email_label = format_email_label(dict(row))
         try:
             result = await asyncio.to_thread(analyze_email, email_id, body)
         except Exception as e:
             set_email_analysis_status(email_id, "failed", str(e))
             raise
-        step_msg = f"邮件智能体：已分析邮件 '{email_id}'"
+        step_msg = f"邮件智能体：已分析邮件{email_label}"
         if result and result.get("item_name"):
             step_msg += f" -> {result.get('item_name')}"
         return {"status": "success", "data": result, "step": step_msg}
@@ -140,15 +144,21 @@ async def analyze_all_emails():
         unanalyzed = get_unanalyzed_emails()
         results = []
         for email in unanalyzed:
+            email_label = format_email_label(email)
             try:
                 res = await asyncio.to_thread(analyze_email, email["id"], email["body"])
-                step_msg = f"邮件智能体：已分析邮件 '{email['id']}'"
+                step_msg = f"邮件智能体：已分析邮件{email_label}"
                 if res and res.get("item_name"):
                     step_msg += f" -> {res.get('item_name')}"
                 results.append({"email_id": email["id"], "status": "success", "data": res, "step": step_msg})
             except Exception as e:
                 set_email_analysis_status(email["id"], "failed", str(e))
-                results.append({"email_id": email["id"], "status": "error", "message": str(e)})
+                results.append({
+                    "email_id": email["id"],
+                    "status": "error",
+                    "message": str(e),
+                    "step": f"邮件智能体：分析邮件{email_label}失败：{str(e)}",
+                })
         return {"status": "success", "processed_count": len(results), "results": results}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

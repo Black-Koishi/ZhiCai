@@ -669,7 +669,8 @@ def get_email_analysis(email_id: str):
     try:
         # Join with orders/emails to get pdf_path、订单状态与邮件状态（供采购组件恢复进度）
         row = conn.execute("""
-            SELECT ea.*, o.pdf_path, o.status AS order_status, e.analysis_status
+            SELECT ea.*, o.pdf_path, o.status AS order_status, e.analysis_status,
+                   e.sender AS email_sender, e.subject AS email_subject
             FROM email_analysis ea
             LEFT JOIN orders o ON ea.order_id = o.id
             LEFT JOIN emails e ON ea.email_id = e.id
@@ -698,7 +699,7 @@ def get_email_analyses_by_status(status: str):
     conn = get_db_connection()
     try:
         rows = conn.execute(
-            "SELECT ea.* FROM email_analysis ea "
+            "SELECT ea.*, e.sender AS email_sender, e.subject AS email_subject FROM email_analysis ea "
             "JOIN emails e ON ea.email_id = e.id "
             "WHERE e.analysis_status = ? ORDER BY ea.id DESC",
             (status,),

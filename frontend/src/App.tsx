@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { ChevronDown, Inbox, Send, Mail } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { formatEmailLabel } from "@/components/emailDisplay"
 
 function App() {
     // Agent Configuration State
@@ -187,9 +188,13 @@ function App() {
             // 单封邮件分析完成后的「进入合规检查」：打开内联采购组件（合规 → 下单 → 发邮件）
             const emailId = action.params?.email_id;
             if (emailId) {
+                const emailLabel = formatEmailLabel({
+                    sender: action.params?.email_sender,
+                    subject: action.params?.email_subject,
+                });
                 setMessages(prev => [...prev, {
                     role: "assistant",
-                    content: `我可以帮你处理邮件 ${emailId} 的采购订单。请查看下方详情以继续。`,
+                    content: `我可以帮你处理邮件${emailLabel}的采购订单。请查看下方详情以继续。`,
                     ui_actions: [{ action_type: "open_inline_procurement", params: { mode: "email", email_id: emailId } }]
                 }]);
             }
