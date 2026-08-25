@@ -64,20 +64,28 @@ function App() {
     const [settingsLoaded, setSettingsLoaded] = useState(false)
 
     useEffect(() => {
-        Promise.all([
-            fetch(`${API_BASE_URL}/settings/models`).then((r) => r.json()),
-            fetch(`${API_BASE_URL}/settings/ollama-models`).then((r) => r.json()),
-            fetch(`${API_BASE_URL}/settings/email`).then((r) => r.json()),
+        const loadJson = (path: string) => fetch(`${API_BASE_URL}${path}`).then((r) => {
+            if (!r.ok) throw new Error(`加载设置失败：${path}`);
+            return r.json();
+        });
+
+        Promise.allSettled([
+            loadJson("/settings/models"),
+            loadJson("/settings/ollama-models"),
+            loadJson("/settings/email"),
         ])
-            .then(([modelsData, ollamaData, emailData]) => {
-                if (modelsData.status === "success") {
-                    setAgentModels(modelsData.models);
-                    setAgentProviders(modelsData.providers || {});
+            .then(([modelsResult, ollamaResult, emailResult]) => {
+                if (modelsResult.status === "fulfilled" && modelsResult.value.status === "success") {
+                    setAgentModels(modelsResult.value.models);
+                    setAgentProviders(modelsResult.value.providers || {});
                 }
-                if (ollamaData.status === "success") setAvailableModels(ollamaData.models || []);
-                if (emailData.status === "success") setEmailConfig(emailData.config);
+                if (ollamaResult.status === "fulfilled" && ollamaResult.value.status === "success") {
+                    setAvailableModels(ollamaResult.value.models || []);
+                }
+                if (emailResult.status === "fulfilled" && emailResult.value.status === "success") {
+                    setEmailConfig(emailResult.value.config);
+                }
             })
-            .catch(() => {})
             .finally(() => setSettingsLoaded(true));
     }, [])
 
@@ -335,6 +343,7 @@ function App() {
                                     emailConfig={emailConfig}
                                     settingsLoaded={settingsLoaded}
                                     onModelsChange={setAgentModels}
+                                    onEmailConfigChange={setEmailConfig}
                                 />
                             </div>
                         )}

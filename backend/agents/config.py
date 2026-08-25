@@ -27,6 +27,18 @@ AGENT_ENV_KEYS = {
 llm_instances = {}
 
 
+def _clear_llm_instances(agent_name: str = None):
+    """清除受配置变更影响的模型客户端，避免继续使用旧密钥或旧地址。"""
+    if agent_name is None:
+        llm_instances.clear()
+        return
+
+    prefix = f"{agent_name}_"
+    for instance_key in list(llm_instances):
+        if instance_key.startswith(prefix):
+            del llm_instances[instance_key]
+
+
 def get_current_model(agent_name: str) -> str:
     """获取指定智能体当前配置的模型名。"""
     key = AGENT_ENV_KEYS.get(agent_name, "ORCHESTRATOR_MODEL")
@@ -105,6 +117,8 @@ def update_agent_model(agent_name: str, model_name: str, provider: str = None):
         os.environ[prov_key] = provider
         set_key(dotenv_path, prov_key, provider)
 
+    _clear_llm_instances(agent_name)
+
 
 def update_cloud_config(base_url: str = None, api_key: str = None):
     """更新云端（OpenAI 兼容）配置并持久化到 .env；api_key 留空表示不修改。"""
@@ -115,6 +129,9 @@ def update_cloud_config(base_url: str = None, api_key: str = None):
     if api_key:
         os.environ["CLOUD_API_KEY"] = api_key
         set_key(dotenv_path, "CLOUD_API_KEY", api_key)
+
+    # ChatOpenAI 在构造时复制密钥和 base_url；配置更新后必须重新实例化。
+    _clear_llm_instances()
 
 
 def list_ollama_models() -> list[str]:

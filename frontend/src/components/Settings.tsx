@@ -14,9 +14,10 @@ interface SettingsProps {
     emailConfig: any;
     settingsLoaded: boolean;
     onModelsChange: (models: Record<string, string>) => void;
+    onEmailConfigChange: (config: any) => void;
 }
 
-export function Settings({ agentModels, agentProviders, availableModels, emailConfig, settingsLoaded, onModelsChange }: SettingsProps) {
+export function Settings({ agentModels, agentProviders, availableModels, emailConfig, settingsLoaded, onModelsChange, onEmailConfigChange }: SettingsProps) {
     const [theme, setTheme] = useState<"light" | "dark">(
         () => (localStorage.getItem("vite-ui-theme") as "light" | "dark") || "light"
     )
@@ -115,7 +116,12 @@ export function Settings({ agentModels, agentProviders, availableModels, emailCo
             // 重新拉取配置，刷新"密码已设置"状态（即时生效，无需重启）
             fetch(`${API_BASE_URL}/settings/email`)
                 .then((r) => r.json())
-                .then((d) => { if (d.status === "success") setEmailPassSet(d.config.email_pass_set); })
+                .then((d) => {
+                    if (d.status === "success") {
+                        setEmailPassSet(d.config.email_pass_set);
+                        onEmailConfigChange(d.config);
+                    }
+                })
                 .catch(() => {});
         } catch (e: any) {
             setEmailMsg({ type: "error", text: e.message });
