@@ -2,7 +2,7 @@
 import asyncio
 
 from fastapi import APIRouter, HTTPException, Query
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from backend.database import create_item, delete_item, update_item, update_inventory, get_items_paginated
 from backend.services.items import onboard_item_from_text
@@ -24,12 +24,12 @@ class CreateItemRequest(BaseModel):
 
 class UpdateItemRequest(BaseModel):
     name: str
-    unit: str = None
+    unit: str | None = None
     unit_price: float = 0
-    vendor_id: int = None
-    qty_on_hand: int = None
-    min_qty: int = None
-    max_capacity: int = None
+    vendor_id: int | None = None
+    qty_on_hand: int | None = Field(default=None, ge=0)
+    min_qty: int | None = Field(default=None, ge=0)
+    max_capacity: int | None = Field(default=None, ge=0)
 
 
 @router.get("/items")

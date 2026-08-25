@@ -83,6 +83,17 @@ def test_fails_when_item_missing_from_inventory(db_conn):
     assert any("未找到 item_id=999" in f for f in result["failures"])
 
 
+def test_fails_cleanly_when_inventory_configuration_is_incomplete(db_conn):
+    _seed_vendor(db_conn)
+    _seed_inventory(db_conn, qty_on_hand=None, min_qty=None, max_capacity=None)
+    _seed_policies(db_conn, max_single_order_amount=100000, min_vendor_score=80)
+
+    result = run_gatekeeper_checks(_base_analysis())
+
+    assert result["passed"] is False
+    assert any("库存配置不完整" in f for f in result["failures"])
+
+
 def test_fails_when_no_item_id(db_conn):
     _seed_policies(db_conn, max_single_order_amount=100000, min_vendor_score=80)
 

@@ -1,3 +1,5 @@
+import { getApiErrorMessage } from "./errors";
+
 export const API_BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 interface ChatRequest {
@@ -452,7 +454,7 @@ export async function createItem(data: {
 
 export async function updateItem(id: number, data: {
     name: string; unit?: string; unit_price?: number; vendor_id?: number | null;
-    qty_on_hand?: number | null; min_qty?: number | null; max_capacity?: number | null;
+    qty_on_hand?: number; min_qty?: number; max_capacity?: number;
 }): Promise<any> {
     const response = await fetch(`${API_BASE_URL}/items/${id}`, {
         method: "PUT",
@@ -461,7 +463,7 @@ export async function updateItem(id: number, data: {
     });
     if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.detail || "更新物料失败");
+        throw new Error(getApiErrorMessage(errorData, "更新物料失败"));
     }
     return response.json();
 }

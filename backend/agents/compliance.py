@@ -30,17 +30,32 @@ def run_gatekeeper_checks(analysis: dict) -> dict:
             c.execute("SELECT qty_on_hand, min_qty, max_capacity FROM inventory WHERE item_id = ?", (item_id,))
             inv = c.fetchone()
             if inv:
-                if inv['qty_on_hand'] > 3*inv['min_qty']:
-                    warnings.append(
-                        f"库存：'{item_name}' 的库存为 {inv['qty_on_hand']} 件 "
-                        f"（高于最小阈值三倍 {3*inv['min_qty']}）。订单可能不紧急。"
+                missing_labels = [
+                    label
+                    for column, label in (
+                        ('qty_on_hand', '现有库存'),
+                        ('min_qty', '最小阈值'),
+                        ('max_capacity', '最大容量'),
                     )
-                projected = inv['qty_on_hand'] + quantity
-                if inv['max_capacity'] > 0 and projected > inv['max_capacity']:
+                    if inv[column] is None
+                ]
+                if missing_labels:
                     failures.append(
-                        f"库存：订购 {quantity} 件将超过最大容量 "
-                        f"（{projected} > {inv['max_capacity']}）。"
+                        f"库存：'{item_name}' 的库存配置不完整（缺少{'、'.join(missing_labels)}），"
+                        "请先在物料管理中补全。"
                     )
+                else:
+                    if inv['qty_on_hand'] > 3*inv['min_qty']:
+                        warnings.append(
+                            f"库存：'{item_name}' 的库存为 {inv['qty_on_hand']} 件 "
+                            f"（高于最小阈值三倍 {3*inv['min_qty']}）。订单可能不紧急。"
+                        )
+                    projected = inv['qty_on_hand'] + quantity
+                    if inv['max_capacity'] > 0 and projected > inv['max_capacity']:
+                        failures.append(
+                            f"库存：订购 {quantity} 件将超过最大容量 "
+                            f"（{projected} > {inv['max_capacity']}）。"
+                        )
             else:
                 failures.append(f"库存：未找到 item_id={item_id} 的记录。")
         else:

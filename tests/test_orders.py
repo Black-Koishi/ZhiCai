@@ -92,6 +92,22 @@ def test_receive_order_creates_inventory_when_missing(db_conn):
     assert row["qty_on_hand"] == 3
 
 
+def test_receive_order_recovers_null_current_stock(db_conn):
+    _seed_vendor(db_conn, email=None)
+    _seed_item(db_conn)
+    _seed_order(db_conn, 1, status="sent", qty=3)
+    db_conn.execute(
+        "INSERT INTO inventory(item_id, qty_on_hand, min_qty, max_capacity) VALUES (1, NULL, NULL, NULL)"
+    )
+    db_conn.commit()
+
+    result = receive_order(1)
+
+    assert result["status"] == "success"
+    row = db_conn.execute("SELECT qty_on_hand FROM inventory WHERE item_id = 1").fetchone()
+    assert row["qty_on_hand"] == 3
+
+
 def test_receive_order_rejects_non_sent(db_conn):
     _seed_vendor(db_conn, email=None)
     _seed_item(db_conn)

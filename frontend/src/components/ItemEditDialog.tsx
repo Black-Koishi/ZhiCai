@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2 } from "lucide-react";
 import { updateItem, fetchSuppliersPaginated, type Supplier } from "@/api/client";
+import { buildItemUpdatePayload } from "./itemEditForm";
 
 interface ItemEditDialogProps {
     open: boolean;
@@ -46,26 +47,14 @@ export function ItemEditDialog({ open, onOpenChange, item, onSaved }: ItemEditDi
 
     const handleSubmit = async () => {
         if (!item) return;
-        if (!form.name.trim()) {
-            setError("请填写物料名称");
-            return;
-        }
         setIsSubmitting(true);
         setError(null);
         try {
-            await updateItem(item.id, {
-                name: form.name.trim(),
-                unit: form.unit.trim() || undefined,
-                unit_price: Number(form.unit_price) || 0,
-                vendor_id: form.vendor_id ? Number(form.vendor_id) : null,
-                qty_on_hand: form.qty_on_hand.trim() !== "" ? Number(form.qty_on_hand) : null,
-                min_qty: form.min_qty.trim() !== "" ? Number(form.min_qty) : null,
-                max_capacity: form.max_capacity.trim() !== "" ? Number(form.max_capacity) : null,
-            });
+            await updateItem(item.id, buildItemUpdatePayload(form));
             onSaved(`✅ 物料「${form.name.trim()}」已更新`);
             onOpenChange(false);
-        } catch (e: any) {
-            setError(e.message || "更新失败");
+        } catch (e: unknown) {
+            setError(e instanceof Error ? e.message : "更新失败");
         } finally {
             setIsSubmitting(false);
         }
@@ -76,7 +65,7 @@ export function ItemEditDialog({ open, onOpenChange, item, onSaved }: ItemEditDi
             <DialogContent className="sm:max-w-[520px] bg-white/95 dark:bg-gray-950/95 backdrop-blur-xl border-white/20">
                 <DialogHeader>
                     <DialogTitle>编辑物料</DialogTitle>
-                    <DialogDescription>SKU 不可修改</DialogDescription>
+                    <DialogDescription>SKU 不可修改；库存字段留空时保持原值不变</DialogDescription>
                 </DialogHeader>
 
                 <div className="grid gap-3">
@@ -111,15 +100,15 @@ export function ItemEditDialog({ open, onOpenChange, item, onSaved }: ItemEditDi
                     </div>
                     <div className="grid grid-cols-4 items-center gap-3">
                         <Label className="text-right">现有库存</Label>
-                        <Input className="col-span-3" type="number" value={form.qty_on_hand} onChange={(e) => setForm({ ...form, qty_on_hand: e.target.value })} placeholder="0" />
+                        <Input className="col-span-3" type="number" min="0" step="1" value={form.qty_on_hand} onChange={(e) => setForm({ ...form, qty_on_hand: e.target.value })} placeholder="留空则不修改" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-3">
                         <Label className="text-right">最小阈值</Label>
-                        <Input className="col-span-3" type="number" value={form.min_qty} onChange={(e) => setForm({ ...form, min_qty: e.target.value })} placeholder="低于该值提示低库存" />
+                        <Input className="col-span-3" type="number" min="0" step="1" value={form.min_qty} onChange={(e) => setForm({ ...form, min_qty: e.target.value })} placeholder="留空则不修改" />
                     </div>
                     <div className="grid grid-cols-4 items-center gap-3">
                         <Label className="text-right">最大容量</Label>
-                        <Input className="col-span-3" type="number" value={form.max_capacity} onChange={(e) => setForm({ ...form, max_capacity: e.target.value })} placeholder="0 表示不限制" />
+                        <Input className="col-span-3" type="number" min="0" step="1" value={form.max_capacity} onChange={(e) => setForm({ ...form, max_capacity: e.target.value })} placeholder="留空则不修改；0 表示不限制" />
                     </div>
                 </div>
 

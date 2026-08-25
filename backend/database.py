@@ -585,7 +585,7 @@ def increase_inventory(item_id: int, qty: int) -> None:
         ).fetchone()
         if exists:
             conn.execute(
-                "UPDATE inventory SET qty_on_hand = qty_on_hand + ? WHERE item_id = ?",
+                "UPDATE inventory SET qty_on_hand = COALESCE(qty_on_hand, 0) + ? WHERE item_id = ?",
                 (qty, item_id),
             )
         else:
