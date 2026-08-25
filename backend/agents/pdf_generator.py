@@ -3,6 +3,11 @@ PDF Purchase Order Generator（纯固定模板，代码填字段，不依赖 LLM
 """
 import os
 from datetime import datetime
+from pathlib import Path
+
+
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+BUNDLED_CJK_FONT = PROJECT_ROOT / "assets" / "fonts" / "NotoSansCJK-Regular.ttc"
 
 
 def _build_po_body(order: dict) -> str:
@@ -56,22 +61,21 @@ def sanitize_text(text: str) -> str:
 
 
 def _load_cjk_font(pdf) -> str:
-    """注册支持中文的字体并返回字体名（无则回退 Helvetica）。"""
-    font_candidates = [
-        r"C:\Windows\Fonts\simhei.ttf",
-        r"C:\Windows\Fonts\SourceHanSansCN-Normal.ttf",
-        r"C:\Windows\Fonts\msyh.ttc",
-    ]
-    for fp in font_candidates:
-        if os.path.exists(fp):
-            try:
-                pdf.add_font("CNFont", "", fp, uni=True)
-                pdf.add_font("CNFont", "B", fp, uni=True)
-                pdf.add_font("CNFont", "I", fp, uni=True)
-                return "CNFont"
-            except Exception:
-                continue
-    return "Helvetica"
+    """注册项目内置中文字体；缺失时明确失败，禁止回退非 Unicode 字体。"""
+    if not BUNDLED_CJK_FONT.is_file():
+        raise RuntimeError(f"项目内置中文字体缺失：{BUNDLED_CJK_FONT}")
+
+    font_path = str(BUNDLED_CJK_FONT)
+    try:
+        # Noto Sans CJK 同时覆盖 CJK、拉丁字母、数字和常用符号。使用同一
+        # 字形文件注册各样式，确保模板
+        # 在 Windows、macOS、Linux 和容器中得到一致的 Unicode 支持。
+        pdf.add_font("CNFont", "", font_path)
+        pdf.add_font("CNFont", "B", font_path)
+        pdf.add_font("CNFont", "I", font_path)
+    except Exception as exc:
+        raise RuntimeError(f"无法加载项目内置中文字体：{BUNDLED_CJK_FONT}") from exc
+    return "CNFont"
 
 
 def generate_order_pdf(order: dict, output_dir: str = "orders") -> str:
@@ -106,7 +110,7 @@ def generate_order_pdf(order: dict, output_dir: str = "orders") -> str:
     pdf.cell(0, 6, text=f"采购订单号：# {order_id}", align=Align.C)
     pdf.ln(6)
     pdf.cell(0, 6, text=f"日期：{order.get('created_at', datetime.now().strftime('%Y-%m-%d'))}", align=Align.C)
-    pdf.ln(4)
+    pdf.ln(8)
     pdf.set_draw_color(200, 200, 200)
     pdf.line(20, pdf.get_y(), 190, pdf.get_y())
     pdf.ln(6)

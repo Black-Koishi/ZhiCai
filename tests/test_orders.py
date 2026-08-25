@@ -4,7 +4,9 @@
 取消订单（草稿/已发送→已取消）以及各状态机的非法流转拒绝。
 供应商不填邮箱时 send_order_email 会跳过 SMTP，因此测试无需网络。
 """
-from backend.services.orders import send_order_email, receive_order, cancel_order
+import pytest
+
+from backend.services.orders import send_order_email, receive_order, cancel_order, create_order_with_pdf
 
 
 def _seed_vendor(conn, vendor_id=1, email=None):
@@ -42,6 +44,17 @@ def test_send_order_email_marks_sent(db_conn):
     assert result["email_sent"] is False
     row = db_conn.execute("SELECT status FROM orders WHERE id = 1").fetchone()
     assert row["status"] == "sent"
+
+
+def test_create_order_rolls_back_when_pdf_generation_fails(db_conn, monkeypatch):
+    _seed_vendor(db_conn, email=None)
+    _seed_item(db_conn)
+    monkeypatch.setattr("backend.services.orders.generate_order_pdf", lambda *_: (_ for _ in ()).throw(RuntimeError("PDF failed")))
+
+    with pytest.raises(RuntimeError, match="PDF failed"):
+        create_order_with_pdf(item_id=1, vendor_id=1, qty=2, amount=200)
+
+    assert db_conn.execute("SELECT COUNT(*) AS count FROM orders").fetchone()["count"] == 0
 
 
 def test_send_order_email_rejects_non_draft(db_conn):

@@ -6,7 +6,7 @@ import os
 
 from backend.database import (
     create_order, get_order_by_id, get_db_connection,
-    update_order_status, increase_inventory,
+    update_order_status, increase_inventory, delete_order,
 )
 from backend.agents import generate_order_pdf
 from backend.email_service import EmailService
@@ -34,9 +34,14 @@ def generate_and_store_pdf(order_id: int, order_data: dict) -> str:
 def create_order_with_pdf(item_id, vendor_id, qty, amount, priority: str = "Normal") -> dict:
     """创建订单并生成 PDF。返回 {"order_id": int, "pdf_path": str(URL)}。"""
     order_id = create_order(item_id=item_id, vendor_id=vendor_id, qty=qty, amount=amount)
-    order_data = get_order_by_id(order_id) or {}
-    order_data["priority"] = priority
-    pdf_path = generate_and_store_pdf(order_id, order_data)
+    try:
+        order_data = get_order_by_id(order_id) or {}
+        order_data["priority"] = priority
+        pdf_path = generate_and_store_pdf(order_id, order_data)
+    except Exception:
+        # PDF 是订单创建的必要产物；生成失败时不保留半成品订单。
+        delete_order(order_id)
+        raise
     return {"order_id": order_id, "pdf_path": f"/static/orders/{os.path.basename(pdf_path)}"}
 
 

@@ -1,5 +1,5 @@
 """纯函数测试：PDF 文本处理 / 评审格式化 / 附件存储键。"""
-from backend.agents.pdf_generator import sanitize_text, _build_po_body
+from backend.agents.pdf_generator import sanitize_text, _build_po_body, generate_order_pdf
 from backend.services.compliance import format_review
 from backend.attachments import _safe_name, storage_key
 
@@ -47,6 +47,23 @@ def test_build_po_body_default_priority_note():
     })
     assert "按约定周期" in body
     assert "加急" not in body
+
+
+def test_generate_order_pdf_supports_chinese_on_every_platform(tmp_path):
+    pdf_path = generate_order_pdf({
+        "order_id": 42,
+        "vendor_name": "测试供应商",
+        "vendor_email": "vendor@example.com",
+        "item_name": "办公用品",
+        "qty": 3,
+        "unit_price": 25,
+        "amount": 75,
+        "priority": "标准",
+    }, str(tmp_path))
+
+    data = open(pdf_path, "rb").read()
+    assert data.startswith(b"%PDF-")
+    assert len(data) > 1_000
 
 
 def test_format_review_renders_all_sections():
